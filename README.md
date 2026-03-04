@@ -1,17 +1,16 @@
 # ETL Baseball Pipeline
 
-An incremental ETL pipeline in R that pulls Chicago White Sox Statcast and game data after every game, loads it into a PostgreSQL database, and automatically generates game visuals.
+An incremental ETL pipeline in R that pulls Chicago White Sox Statcast, game, and box score data after every game, loads it into a PostgreSQL database, and automatically generates game visuals.
 
 Built as a portfolio project demonstrating end-to-end data engineering with R, SQL, and geospatial visualisation.
 
 ---
 
 ## Project Structure
-
 ```
 ETL-baseball-pipeline/
 ├── R/
-│   ├── 01_extract.R       # Pull data from Baseball Savant + MLB API
+│   ├── 01_extract.R       # Pull data from Baseball Savant, MLB API, and FanGraphs
 │   ├── 02_transform.R     # Clean and reshape into analysis-ready tables
 │   ├── 03_load.R          # Load into PostgreSQL with deduplication
 │   ├── 04_queries.R       # Example SQL queries for exploration
@@ -27,34 +26,35 @@ ETL-baseball-pipeline/
 ---
 
 ## Pipeline Architecture
-
 ```
-Baseball Savant (Statcast)          MLB Stats API
-        |                                |
-   01_extract.R  <----------------------->
-        |
-   data/raw/*.rds
-        |
-   02_transform.R
-        |
-   data/processed/*.rds
-        |
-   03_load.R
-        |
-   PostgreSQL (baseball_statcast)
-        |
-   05_visualize.R
-        |
-   outputs/visuals/{date}/
+Baseball Savant (Statcast)     MLB Stats API     FanGraphs (via baseballr)
+        |                           |                      |
+        └───────────── 01_extract.R ──────────────────────┘
+                             |
+                      data/raw/*.rds
+                             |
+                      02_transform.R
+                             |
+                   data/processed/*.rds
+                             |
+                        03_load.R
+                             |
+               PostgreSQL (baseball_statcast)
+                             |
+                      05_visualize.R
+                             |
+                  outputs/visuals/{date}/
 ```
 
 The pipeline is **incremental**: on the first run it pulls all games from the start of the season. On every subsequent run it checks the most recent `game_date` already in the database and pulls only new games, so re-running never creates duplicates.
+
+A `pipeline_status.txt` flag is written by `01_extract.R` on every run. If the database is already up to date, `main.R` reads the `skip` flag and exits cleanly without running the transform, load, or visualise steps.
 
 ---
 
 ## Database Schema
 
-Four tables in PostgreSQL, linked by `game_pk` and `player_id`:
+Six tables in PostgreSQL, linked by `game_pk` and `player_id`:
 
 ### `games`
 One row per game. Includes venue, weather, attendance, final score, and a CWS win/loss result flag.
@@ -115,6 +115,43 @@ One row per batted ball event (both teams). Core Statcast metrics including exit
 | bb_type | TEXT | fly_ball / ground_ball / line_drive / popup |
 | estimated_ba_using_speedangle | NUMERIC | Expected batting average (xBA) |
 
+### `batting_logs`
+One row per player per game. Per-game batting box score stats sourced from FanGraphs. Populated once regular season data is available.
+
+| Column | Type | Description |
+|---|---|---|
+| player_id | INTEGER (PK) | MLB player identifier |
+| game_date | DATE (PK) | Date of game |
+| ab | INTEGER | At-bats |
+| pa | INTEGER | Plate appearances |
+| h | INTEGER | Hits |
+| hr | INTEGER | Home runs |
+| rbi | INTEGER | Runs batted in |
+| bb | INTEGER | Walks |
+| k | INTEGER | Strikeouts |
+| avg | NUMERIC | Batting average |
+| obp | NUMERIC | On-base percentage |
+| slg | NUMERIC | Slugging percentage |
+| woba | NUMERIC | Weighted on-base average |
+| wrc_plus | INTEGER | Weighted runs created+ |
+
+### `pitching_logs`
+One row per pitcher per game. Per-game pitching box score stats sourced from FanGraphs. Populated once regular season data is available.
+
+| Column | Type | Description |
+|---|---|---|
+| player_id | INTEGER (PK) | MLB player identifier |
+| game_date | DATE (PK) | Date of game |
+| ip | NUMERIC | Innings pitched |
+| h | INTEGER | Hits allowed |
+| er | INTEGER | Earned runs |
+| bb | INTEGER | Walks |
+| k | INTEGER | Strikeouts |
+| era | NUMERIC | Earned run average |
+| whip | NUMERIC | Walks and hits per inning |
+| fip | NUMERIC | Fielding independent pitching |
+| game_score | NUMERIC | Bill James game score |
+
 ---
 
 ## Data Sources
@@ -123,6 +160,7 @@ One row per batted ball event (both teams). Core Statcast metrics including exit
 |---|---|---|
 | [Baseball Savant](https://baseballsavant.mlb.com/) | `baseballr::statcast_search()` | Statcast batted ball events |
 | [MLB Stats API](https://statsapi.mlb.com/) | `baseballr::mlb_schedule()`, `mlb_game_info()`, `mlb_game_linescore()`, `mlb_batting_orders()` | Schedule, game info, linescores, batting orders |
+| [FanGraphs](https://www.fangraphs.com/) | `baseballr::fg_batter_game_logs()`, `fg_pitcher_game_logs()` | Per-game batting and pitching box score stats |
 
 ---
 
@@ -143,7 +181,6 @@ Spray charts use the [`GeomMLBStadiums`](https://github.com/bdilday/GeomMLBStadi
 ---
 
 ## Example Queries
-
 ```sql
 -- CWS season record so far
 SELECT result, COUNT(*) AS games
@@ -166,12 +203,20 @@ GROUP BY pitcher
 HAVING COUNT(*) >= 5
 ORDER BY avg_ev DESC;
 
--- Inning-by-inning scoring across the season
-SELECT g.game_date, g.opponent, l.inning_label,
-       l.home_runs, l.away_runs
-FROM linescore l
-JOIN games g ON l.game_pk = g.game_pk
-ORDER BY g.game_date, l.inning;
+-- Season batting leaderboard by wRC+
+SELECT player_name, SUM(pa) AS pa, ROUND(AVG(wrc_plus)) AS avg_wrc_plus,
+       ROUND(AVG(obp), 3) AS avg_obp, ROUND(AVG(slg), 3) AS avg_slg
+FROM batting_logs
+GROUP BY player_name
+HAVING SUM(pa) >= 10
+ORDER BY avg_wrc_plus DESC;
+
+-- Starting pitcher performance log
+SELECT player_name, game_date, ip, er, k, bb,
+       ROUND(era, 2) AS era, ROUND(fip, 2) AS fip, game_score
+FROM pitching_logs
+WHERE gs = 1
+ORDER BY game_date DESC;
 ```
 
 ---
@@ -181,7 +226,7 @@ ORDER BY g.game_date, l.inning;
 | Tool | Purpose |
 |---|---|
 | R | Core language for ETL and visualisation |
-| baseballr | Statcast and MLB API data extraction |
+| baseballr | Statcast, MLB API, and FanGraphs data extraction |
 | dplyr / lubridate / janitor | Data transformation |
 | DBI / RPostgres | PostgreSQL connection and loading |
 | ggplot2 / ggrepel | Visualisation |
@@ -224,7 +269,7 @@ On the first run the full season to date is pulled. After that, run `source("mai
 
 ## Automated Scheduling
 
-The pipeline can be scheduled via Windows Task Scheduler to run overnight automatically after game days. See `main.R` for the full orchestration logic.
+The pipeline is scheduled via Windows Task Scheduler to run automatically at 6am after game days. `main.R` reads a `pipeline_status.txt` flag written by the extract step: if no new games were found, the pipeline exits cleanly without running the transform, load, or visualise steps.
 
 ---
 
