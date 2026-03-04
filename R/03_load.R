@@ -12,8 +12,8 @@ games        <- readRDS("data/processed/games.rds")
 players      <- readRDS("data/processed/players.rds")
 batted_balls <- readRDS("data/processed/batted_balls.rds")
 linescore    <- readRDS("data/processed/linescore.rds")
-batting_logs  <- readRDS("data/processed/batting_logs.rds")
-pitching_logs <- readRDS("data/processed/pitching_logs.rds")
+batting_logs  <- if (file.exists("data/processed/batting_logs.rds"))  readRDS("data/processed/batting_logs.rds")  else NULL
+pitching_logs <- if (file.exists("data/processed/pitching_logs.rds")) readRDS("data/processed/pitching_logs.rds") else NULL
 
 # -------------------------
 # Database connection
@@ -67,20 +67,20 @@ dbExecute(con, "
 
 dbExecute(con, "
   CREATE TABLE IF NOT EXISTS linescore (
-    game_pk          BIGINT,
-    inning           INTEGER,
-    inning_label     TEXT,
-    home_team_id     INTEGER,
-    home_team_name   TEXT,
-    away_team_id     INTEGER,
-    away_team_name   TEXT,
-    home_runs        INTEGER,
-    home_hits        INTEGER,
-    home_errors      INTEGER,
+    game_pk           BIGINT,
+    inning            INTEGER,
+    inning_label      TEXT,
+    home_team_id      INTEGER,
+    home_team_name    TEXT,
+    away_team_id      INTEGER,
+    away_team_name    TEXT,
+    home_runs         INTEGER,
+    home_hits         INTEGER,
+    home_errors       INTEGER,
     home_left_on_base INTEGER,
-    away_runs        INTEGER,
-    away_hits        INTEGER,
-    away_errors      INTEGER,
+    away_runs         INTEGER,
+    away_hits         INTEGER,
+    away_errors       INTEGER,
     away_left_on_base INTEGER,
     PRIMARY KEY (game_pk, inning)
   )
@@ -141,8 +141,6 @@ dbExecute(con, "
   )
 ")
 
-message("Tables created (if not already existing)")
-
 dbExecute(con, "
   CREATE TABLE IF NOT EXISTS batting_logs (
     player_name  TEXT,
@@ -196,6 +194,8 @@ dbExecute(con, "
   )
 ")
 
+message("Tables created (if not already existing)")
+
 # -------------------------
 # Helper: upsert rows safely
 # -------------------------
@@ -205,13 +205,11 @@ upsert_table <- function(con, table_name, data, conflict_cols) {
     return(invisible(NULL))
   }
 
-  # Write to a temporary table
-  tmp <- paste0("tmp_", table_name)
+  tmp      <- paste0("tmp_", table_name)
   dbWriteTable(con, tmp, data, overwrite = TRUE, temporary = TRUE)
 
-  # Build INSERT ... ON CONFLICT DO NOTHING
-  cols        <- paste(names(data), collapse = ", ")
-  conflict    <- paste(conflict_cols, collapse = ", ")
+  cols     <- paste(names(data), collapse = ", ")
+  conflict <- paste(conflict_cols, collapse = ", ")
   sql <- glue::glue("
     INSERT INTO {table_name} ({cols})
     SELECT {cols} FROM {tmp}
@@ -225,27 +223,30 @@ upsert_table <- function(con, table_name, data, conflict_cols) {
 # Install glue if needed
 if (!requireNamespace("glue", quietly = TRUE)) install.packages("glue")
 library(glue)
+
+# -------------------------
+# Coerce to data.frame
+# -------------------------
 games        <- as.data.frame(games)
 players      <- as.data.frame(players)
 batted_balls <- as.data.frame(batted_balls)
 linescore    <- as.data.frame(linescore)
-games$home_team_id <- as.integer(games$home_team_id)
-games$away_team_id <- as.integer(games$away_team_id)
-games$home_team_id    <- as.integer(games$home_team_id)
-games$away_team_id    <- as.integer(games$away_team_id)
+games$home_team_id     <- as.integer(games$home_team_id)
+games$away_team_id     <- as.integer(games$away_team_id)
 linescore$home_team_id <- as.integer(linescore$home_team_id)
 linescore$away_team_id <- as.integer(linescore$away_team_id)
-batting_logs  <- as.data.frame(batting_logs)
-pitching_logs <- as.data.frame(pitching_logs)
+if (!is.null(batting_logs))  batting_logs  <- as.data.frame(batting_logs)
+if (!is.null(pitching_logs)) pitching_logs <- as.data.frame(pitching_logs)
 
 # -------------------------
 # Load each table
 # -------------------------
-upsert_table(con, "games",        games,        "game_pk")
-upsert_table(con, "players",      players,      "player_id")
-upsert_table(con, "linescore",    linescore,    c("game_pk", "inning"))
-upsert_table(con, "batting_logs",  batting_logs,  c("player_id", "game_date"))
-upsert_table(con, "pitching_logs", pitching_logs, c("player_id", "game_date"))
+upsert_table(con, "games",     games,     "game_pk")
+upsert_table(con, "players",   players,   "player_id")
+upsert_table(con, "linescore", linescore, c("game_pk", "inning"))
+if (!is.null(batting_logs))  upsert_table(con, "batting_logs",  batting_logs,  c("player_id", "game_date"))
+if (!is.null(pitching_logs)) upsert_table(con, "pitching_logs", pitching_logs, c("player_id", "game_date"))
+
 # Drop and recreate batted_balls to match actual columns
 dbExecute(con, "DROP TABLE IF EXISTS batted_balls")
 dbWriteTable(con, "batted_balls", batted_balls, overwrite = TRUE)

@@ -13,8 +13,8 @@ game_info_raw      <- readRDS("data/raw/game_info_raw.rds")
 linescore_raw      <- readRDS("data/raw/linescore_raw.rds")
 batting_orders_raw <- readRDS("data/raw/batting_orders_raw.rds")
 schedule_raw       <- readRDS("data/raw/schedule_raw.rds")
-batting_logs_raw   <- readRDS("data/raw/batting_logs_raw.rds")
-pitching_logs_raw  <- readRDS("data/raw/pitching_logs_raw.rds")
+batting_logs_raw  <- if (file.exists("data/raw/batting_logs_raw.rds"))  readRDS("data/raw/batting_logs_raw.rds")  else NULL
+pitching_logs_raw <- if (file.exists("data/raw/pitching_logs_raw.rds")) readRDS("data/raw/pitching_logs_raw.rds") else NULL
 
 # -------------------------
 # CWS game_pks only
@@ -173,96 +173,100 @@ linescore <- linescore_raw |>
 message("Linescore rows: ", nrow(linescore))
 
 # -------------------------
-# Save processed data
-# -------------------------
-# -------------------------
 # 5. Batting game logs
 # -------------------------
-message("Transforming batting game logs...")
-
-batting_logs <- batting_logs_raw |>
-  select(
-    player_name  = PlayerName,
-    player_id    = playerid,
-    team         = Team,
-    game_date    = Date,
-    opponent     = Opp,
-    home_game    = Home,
-    ab           = AB,
-    pa           = PA,
-    h            = H,
-    doubles      = Doubles,
-    triples      = Triples,
-    hr           = HR,
-    rbi          = RBI,
-    bb           = BB,
-    k            = SO,
-    sb           = SB,
-    avg          = AVG,
-    obp          = OBP,
-    slg          = SLG,
-    ops          = OPS,
-    woba         = wOBA,
-    wrc_plus     = wRC_plus
-  ) |>
-  mutate(
-    game_date = as.Date(game_date),
-    home_game = home_game == "",
-    across(c(ab, pa, h, doubles, triples, hr, rbi, bb, k, sb), as.integer),
-    across(c(avg, obp, slg, ops, woba), as.numeric),
-    wrc_plus = as.integer(wrc_plus)
-  ) |>
-  clean_names()
-
-message("Batting log rows: ", nrow(batting_logs))
+if (!is.null(batting_logs_raw) && nrow(batting_logs_raw) > 0) {
+  message("Transforming batting game logs...")
+  batting_logs <- batting_logs_raw |>
+    select(
+      player_name = PlayerName,
+      player_id   = playerid,
+      team        = Team,
+      game_date   = Date,
+      opponent    = Opp,
+      home_game   = Home,
+      ab          = AB,
+      pa          = PA,
+      h           = H,
+      doubles     = Doubles,
+      triples     = Triples,
+      hr          = HR,
+      rbi         = RBI,
+      bb          = BB,
+      k           = SO,
+      sb          = SB,
+      avg         = AVG,
+      obp         = OBP,
+      slg         = SLG,
+      ops         = OPS,
+      woba        = wOBA,
+      wrc_plus    = wRC_plus
+    ) |>
+    mutate(
+      game_date = as.Date(game_date),
+      home_game = home_game == "",
+      across(c(ab, pa, h, doubles, triples, hr, rbi, bb, k, sb), as.integer),
+      across(c(avg, obp, slg, ops, woba), as.numeric),
+      wrc_plus  = as.integer(wrc_plus)
+    ) |>
+    clean_names()
+  message("Batting log rows: ", nrow(batting_logs))
+} else {
+  message("No batting log data available, skipping.")
+  batting_logs <- NULL
+}
 
 # -------------------------
 # 6. Pitching game logs
 # -------------------------
-message("Transforming pitching game logs...")
-
-pitching_logs <- pitching_logs_raw |>
-  select(
-    player_name  = PlayerName,
-    player_id    = playerid,
-    team         = Team,
-    game_date    = Date,
-    opponent     = Opp,
-    home_game    = Home,
-    gs           = GS,
-    ip           = IP,
-    h            = H,
-    er           = ER,
-    hr           = HR,
-    bb           = BB,
-    k            = SO,
-    era          = ERA,
-    whip         = WHIP,
-    k_per_9      = K_9,
-    bb_per_9     = BB_9,
-    fip          = FIP,
-    game_score   = GameScore
-  ) |>
-  mutate(
-    game_date = as.Date(game_date),
-    home_game = home_game == "",
-    gs        = as.integer(gs),
-    across(c(h, er, hr, bb, k), as.integer),
-    across(c(ip, era, whip, k_per_9, bb_per_9, fip, game_score), as.numeric)
-  ) |>
-  clean_names()
-
-message("Pitching log rows: ", nrow(pitching_logs))
+if (!is.null(pitching_logs_raw) && nrow(pitching_logs_raw) > 0) {
+  message("Transforming pitching game logs...")
+  pitching_logs <- pitching_logs_raw |>
+    select(
+      player_name = PlayerName,
+      player_id   = playerid,
+      team        = Team,
+      game_date   = Date,
+      opponent    = Opp,
+      home_game   = Home,
+      gs          = GS,
+      ip          = IP,
+      h           = H,
+      er          = ER,
+      hr          = HR,
+      bb          = BB,
+      k           = SO,
+      era         = ERA,
+      whip        = WHIP,
+      k_per_9     = K_9,
+      bb_per_9    = BB_9,
+      fip         = FIP,
+      game_score  = GameScore
+    ) |>
+    mutate(
+      game_date = as.Date(game_date),
+      home_game = home_game == "",
+      gs        = as.integer(gs),
+      across(c(h, er, hr, bb, k), as.integer),
+      across(c(ip, era, whip, k_per_9, bb_per_9, fip, game_score), as.numeric)
+    ) |>
+    clean_names()
+  message("Pitching log rows: ", nrow(pitching_logs))
+} else {
+  message("No pitching log data available, skipping.")
+  pitching_logs <- NULL
+}
 
 # -------------------------
 # Save processed data
 # -------------------------
-saveRDS(games,         "data/processed/games.rds")
-saveRDS(players,       "data/processed/players.rds")
-saveRDS(batted_balls,  "data/processed/batted_balls.rds")
-saveRDS(linescore,     "data/processed/linescore.rds")
-saveRDS(batting_logs,  "data/processed/batting_logs.rds")
-saveRDS(pitching_logs, "data/processed/pitching_logs.rds")
+saveRDS(games,        "data/processed/games.rds")
+saveRDS(players,      "data/processed/players.rds")
+saveRDS(batted_balls, "data/processed/batted_balls.rds")
+saveRDS(linescore,    "data/processed/linescore.rds")
+if (!is.null(batting_logs))  saveRDS(batting_logs,  "data/processed/batting_logs.rds")
+if (!is.null(pitching_logs)) saveRDS(pitching_logs, "data/processed/pitching_logs.rds")
 
 message("All transformed tables saved to data/processed/")
 message("Transform complete.")
+

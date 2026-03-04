@@ -25,6 +25,9 @@ if (pipeline_status == "skip") {
 
 } else {
 
+  # -------------------------
+  # Step 2: Transform
+  # -------------------------
   message("\n--- STEP 2: TRANSFORM ---")
   tryCatch(
     source("R/02_transform.R"),
@@ -34,6 +37,9 @@ if (pipeline_status == "skip") {
     }
   )
 
+  # -------------------------
+  # Step 3: Load
+  # -------------------------
   message("\n--- STEP 3: LOAD ---")
   tryCatch(
     source("R/03_load.R"),
@@ -43,6 +49,9 @@ if (pipeline_status == "skip") {
     }
   )
 
+  # -------------------------
+  # Step 4: Visualise
+  # -------------------------
   message("\n--- STEP 4: VISUALISE ---")
   tryCatch(
     source("R/05_visualize.R"),
@@ -52,11 +61,15 @@ if (pipeline_status == "skip") {
     }
   )
 
-}
+} # end if new data
 
+# -------------------------
+# Done
+# -------------------------
 elapsed <- round(difftime(Sys.time(), start_time, units = "mins"), 1)
 message("\n========================================")
 message("  Pipeline complete in ", elapsed, " mins")
 message("  ", Sys.time())
 message("========================================")
 
+source("main.R")

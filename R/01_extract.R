@@ -14,8 +14,6 @@ library(purrr)
 library(DBI)
 library(RPostgres)
 
-
-
 # -------------------------
 # Database connection
 # -------------------------
@@ -47,6 +45,7 @@ up_to_date <- as.Date(start_date) > as.Date(end_date)
 
 if (up_to_date) {
   message("Database already up to date. No new data to pull.")
+  writeLines("skip", "data/raw/pipeline_status.txt")
 } else {
 
   message("Date range: ", start_date, " to ", end_date)
@@ -150,21 +149,6 @@ if (up_to_date) {
   message("Batted ball events extracted: ", nrow(batted_balls_raw))
 
   # -------------------------
-  # Save all raw extracts
-  # -------------------------
-  saveRDS(game_info_raw,       "data/raw/game_info_raw.rds")
-  saveRDS(linescore_raw,       "data/raw/linescore_raw.rds")
-  saveRDS(batting_orders_raw,  "data/raw/batting_orders_raw.rds")
-  saveRDS(batted_balls_raw,    "data/raw/batted_balls_raw.rds")
-  saveRDS(cws_schedule,        "data/raw/schedule_raw.rds")
-
-  saveRDS(game_info_raw,       "data/raw/game_info_raw.rds")
-  saveRDS(linescore_raw,       "data/raw/linescore_raw.rds")
-  saveRDS(batting_orders_raw,  "data/raw/batting_orders_raw.rds")
-  saveRDS(batted_balls_raw,    "data/raw/batted_balls_raw.rds")
-  saveRDS(cws_schedule,        "data/raw/schedule_raw.rds")
-
-  # -------------------------
   # 6. Batting game logs (FanGraphs)
   # -------------------------
   message("Pulling CWS batting game logs...")
@@ -203,8 +187,18 @@ if (up_to_date) {
     NULL
   })
 
-  saveRDS(batting_logs_raw,  "data/raw/batting_logs_raw.rds")
-  saveRDS(pitching_logs_raw, "data/raw/pitching_logs_raw.rds")
+  # -------------------------
+  # Save all raw extracts
+  # -------------------------
+  saveRDS(game_info_raw,      "data/raw/game_info_raw.rds")
+  saveRDS(linescore_raw,      "data/raw/linescore_raw.rds")
+  saveRDS(batting_orders_raw, "data/raw/batting_orders_raw.rds")
+  saveRDS(batted_balls_raw,   "data/raw/batted_balls_raw.rds")
+  saveRDS(cws_schedule,       "data/raw/schedule_raw.rds")
+  if (!is.null(batting_logs_raw))  saveRDS(batting_logs_raw,  "data/raw/batting_logs_raw.rds")
+  if (!is.null(pitching_logs_raw)) saveRDS(pitching_logs_raw, "data/raw/pitching_logs_raw.rds")
+
+  writeLines("run", "data/raw/pipeline_status.txt")
 
   message("All raw extracts saved to data/raw/")
   message("Extract complete.")
