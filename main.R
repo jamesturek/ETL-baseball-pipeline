@@ -70,6 +70,3 @@ message("\n========================================")
 message("  Pipeline complete in ", elapsed, " mins")
 message("  ", Sys.time())
 message("========================================")
-
-source("main.R")
-
