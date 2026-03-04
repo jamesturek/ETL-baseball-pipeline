@@ -233,4 +233,3 @@ The pipeline can be scheduled via Windows Task Scheduler to run overnight automa
 James Turek | [jamesturek.github.io](https://jamesturek.github.io)
 
 MSc Geographic Data Science, London School of Economics
-Geospatial Analyst, Embedded Alliance
