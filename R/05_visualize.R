@@ -1,5 +1,9 @@
+# 05_visualize.R
 # Game visuals for casual fans — clear, storytelling-focused
 # Saves PNGs to outputs/visuals/{date}/
+#
+# Depends on: DBI, RPostgres, dplyr, ggplot2, ggrepel, GeomMLBStadiums
+# Run after: 01_extract.R, 02_transform.R, 03_load.R
 
 library(DBI)
 library(RPostgres)
@@ -8,9 +12,8 @@ library(ggplot2)
 library(ggrepel)
 library(GeomMLBStadiums)
 
-# -------------------------
-# Connect
-# -------------------------
+# ── Connection ─────────────────────────────────────────────────────────────────
+
 con <- dbConnect(
   RPostgres::Postgres(),
   dbname   = "baseball_statcast",
@@ -22,11 +25,12 @@ con <- dbConnect(
 
 batted_balls <- dbGetQuery(con, "SELECT * FROM batted_balls")
 games        <- dbGetQuery(con, "SELECT * FROM games")
+cws_players  <- dbGetQuery(con, "SELECT full_name FROM players WHERE team_id = 145")
+
 dbDisconnect(con)
 
-# -------------------------
-# Setup
-# -------------------------
+# ── Setup ──────────────────────────────────────────────────────────────────────
+
 run_date <- format(Sys.Date(), "%Y-%m-%d")
 out_dir  <- file.path("outputs", "visuals", run_date)
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -47,17 +51,103 @@ game_title <- paste0(
   "   |   ", format(as.Date(latest_game$game_date), "%B %d, %Y")
 )
 
-result_label <- if (latest_game$result == "W") "WIN" else if (latest_game$result == "L") "LOSS" else "TIE"
-
 stadium_id <- if (latest_game$cws_home && latest_game$game_type == "R") {
   "white_soxs"
 } else {
   "generic"
 }
 
-# -------------------------
-# 1. CWS spray chart
-# -------------------------
+cws_name_list <- cws_players$full_name
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+field_layers <- function(stadium) {
+  outfield <- GeomMLBStadiums::MLBStadiumsPathData |>
+    filter(team == stadium, segment == "outfield_outer") |>
+    rename(hc_x = x, hc_y = y) |>
+    mlbam_xy_transformation() |>
+    rename(x = hc_x_, y = hc_y_)
+
+  infield <- GeomMLBStadiums::MLBStadiumsPathData |>
+    filter(team == stadium, segment == "infield_outer") |>
+    rename(hc_x = x, hc_y = y) |>
+    mlbam_xy_transformation() |>
+    rename(x = hc_x_, y = hc_y_)
+
+  list(
+    geom_polygon(data = outfield, aes(x = x, y = y),
+                 fill = "#2d6a2d", colour = NA, inherit.aes = FALSE),
+    geom_polygon(data = infield, aes(x = x, y = y),
+                 fill = "#b5784a", colour = NA, inherit.aes = FALSE),
+    geom_mlb_stadium(
+      stadium_ids              = stadium,
+      stadium_segments         = "all",
+      stadium_transform_coords = TRUE,
+      colour                   = "#1a1a1a",
+      linewidth                = 0.4
+    )
+  )
+}
+
+hit_colours <- scale_colour_manual(
+  values = c(
+    "Single"   = "#2196F3",
+    "Double"   = "#4CAF50",
+    "Triple"   = "#FF9800",
+    "Home Run" = "#F44336",
+    "Out"      = "grey75"
+  )
+)
+
+theme_spray <- function() {
+  theme_void(base_size = 13) +
+    theme(
+      legend.position  = "bottom",
+      legend.title     = element_blank(),
+      legend.text      = element_text(size = 11),
+      plot.title       = element_text(face = "bold", size = 15, hjust = 0.5),
+      plot.subtitle    = element_text(size = 11, hjust = 0.5, colour = "grey40"),
+      plot.caption     = element_text(size = 9, colour = "grey60", hjust = 0.5),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      plot.margin      = margin(10, 10, 10, 10)
+    )
+}
+
+hit_labels <- function() {
+  geom_label_repel(
+    aes(label = label),
+    na.rm         = TRUE,
+    size          = 3.5,
+    fontface      = "bold",
+    box.padding   = 0.4,
+    colour        = "grey20",
+    fill          = "white",
+    label.size    = 0.3,
+    show.legend   = FALSE
+  )
+}
+
+add_hit_result <- function(df) {
+  df |>
+    mutate(
+      hit_result = case_when(
+        events == "single"                  ~ "Single",
+        events == "double"                  ~ "Double",
+        events == "triple"                  ~ "Triple",
+        events == "home_run"                ~ "Home Run",
+        grepl("out|error|fielders", events) ~ "Out",
+        TRUE                                ~ "Other"
+      ),
+      label = if_else(
+        events %in% c("home_run", "triple", "double"),
+        sub(",.*", "", player_name),
+        NA_character_
+      )
+    )
+}
+
+# ── 1. CWS spray chart ─────────────────────────────────────────────────────────
+
 message("Generating CWS spray chart...")
 
 cws_batted <- batted_balls |>
@@ -66,66 +156,24 @@ cws_batted <- batted_balls |>
     home_team == "CWS" & inning_topbot == "Bot" |
     away_team == "CWS" & inning_topbot == "Top"
   ) |>
-  mutate(
-    hit_result = case_when(
-      events == "single"                  ~ "Single",
-      events == "double"                  ~ "Double",
-      events == "triple"                  ~ "Triple",
-      events == "home_run"                ~ "Home Run",
-      grepl("out|error|fielders", events) ~ "Out",
-      TRUE                                ~ "Other"
-    ),
-    label = if_else(
-      events %in% c("home_run", "triple", "double"),
-      sub(",.*", "", player_name),
-      NA_character_
-    )
-  )
+  add_hit_result() |>
+  filter(hit_result != "Other") |>
+  mlbam_xy_transformation() |>
+  select(-hc_x, -hc_y) |>
+  rename(hc_x = hc_x_, hc_y = hc_y_)
 
 p1 <- ggplot(cws_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
-  geom_mlb_stadium(
-    stadium_ids              = stadium_id,
-    stadium_segments         = "all",
-    colour                   = "grey60",
-    size                     = 0.5
-  ) +
+  field_layers(stadium_id) +
   geom_spraychart(
     stadium_ids              = stadium_id,
+    stadium_transform_coords = TRUE,
     size                     = 4,
     alpha                    = 0.85
   ) +
-  geom_label_repel(
-    aes(label = label),
-    na.rm         = TRUE,
-    size          = 3.5,
-    fontface      = "bold",
-    box.padding   = 0.4,
-    colour        = "grey20",
-    fill          = "white",
-    label.size    = 0.3,
-    show.legend   = FALSE
-  ) +
-  scale_colour_manual(values = c(
-    "Single"   = "#2196F3",
-    "Double"   = "#4CAF50",
-    "Triple"   = "#FF9800",
-    "Home Run" = "#F44336",
-    "Out"      = "grey70",
-    "Other"    = "grey85"
-  )) +
+  hit_labels() +
+  hit_colours +
   coord_fixed() +
-  scale_y_reverse() +
-  theme_void(base_size = 13) +
-  theme(
-    legend.position  = "bottom",
-    legend.title     = element_blank(),
-    legend.text      = element_text(size = 11),
-    plot.title       = element_text(face = "bold", size = 15, hjust = 0.5),
-    plot.subtitle    = element_text(size = 11, hjust = 0.5, colour = "grey40"),
-    plot.caption     = element_text(size = 9, colour = "grey60", hjust = 0.5),
-    plot.background  = element_rect(fill = "white", colour = NA),
-    plot.margin      = margin(10, 10, 10, 10)
-  ) +
+  theme_spray() +
   labs(
     title    = "Where Did the White Sox Hit the Ball?",
     subtitle = game_title,
@@ -134,9 +182,8 @@ p1 <- ggplot(cws_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
 
 save_plot(p1, "01_cws_spray_chart.png")
 
-# -------------------------
-# 2. Opponent spray chart
-# -------------------------
+# ── 2. Opponent spray chart ────────────────────────────────────────────────────
+
 message("Generating opponent spray chart...")
 
 opp_batted <- batted_balls |>
@@ -145,66 +192,24 @@ opp_batted <- batted_balls |>
     home_team == "CWS" & inning_topbot == "Top" |
     away_team == "CWS" & inning_topbot == "Bot"
   ) |>
-  mutate(
-    hit_result = case_when(
-      events == "single"                  ~ "Single",
-      events == "double"                  ~ "Double",
-      events == "triple"                  ~ "Triple",
-      events == "home_run"                ~ "Home Run",
-      grepl("out|error|fielders", events) ~ "Out",
-      TRUE                                ~ "Other"
-    ),
-    label = if_else(
-      events %in% c("home_run", "triple", "double"),
-      sub(",.*", "", player_name),
-      NA_character_
-    )
-  )
+  add_hit_result() |>
+  filter(hit_result != "Other") |>
+  mlbam_xy_transformation() |>
+  select(-hc_x, -hc_y) |>
+  rename(hc_x = hc_x_, hc_y = hc_y_)
 
 p2 <- ggplot(opp_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
-  geom_mlb_stadium(
-    stadium_ids              = stadium_id,
-    stadium_segments         = "all",
-    colour                   = "grey60",
-    size                     = 0.5
-  ) +
+  field_layers(stadium_id) +
   geom_spraychart(
     stadium_ids              = stadium_id,
+    stadium_transform_coords = TRUE,
     size                     = 4,
     alpha                    = 0.85
   ) +
-  geom_label_repel(
-    aes(label = label),
-    na.rm         = TRUE,
-    size          = 3.5,
-    fontface      = "bold",
-    box.padding   = 0.4,
-    colour        = "grey20",
-    fill          = "white",
-    label.size    = 0.3,
-    show.legend   = FALSE
-  ) +
-  scale_colour_manual(values = c(
-    "Single"   = "#2196F3",
-    "Double"   = "#4CAF50",
-    "Triple"   = "#FF9800",
-    "Home Run" = "#F44336",
-    "Out"      = "grey70",
-    "Other"    = "grey85"
-  )) +
+  hit_labels() +
+  hit_colours +
   coord_fixed() +
-  scale_y_reverse() +
-  theme_void(base_size = 13) +
-  theme(
-    legend.position  = "bottom",
-    legend.title     = element_blank(),
-    legend.text      = element_text(size = 11),
-    plot.title       = element_text(face = "bold", size = 15, hjust = 0.5),
-    plot.subtitle    = element_text(size = 11, hjust = 0.5, colour = "grey40"),
-    plot.caption     = element_text(size = 9, colour = "grey60", hjust = 0.5),
-    plot.background  = element_rect(fill = "white", colour = NA),
-    plot.margin      = margin(10, 10, 10, 10)
-  ) +
+  theme_spray() +
   labs(
     title    = paste0("Where Did ", latest_game$opponent, " Hit the Ball?"),
     subtitle = game_title,
@@ -213,12 +218,10 @@ p2 <- ggplot(opp_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
 
 save_plot(p2, "02_opponent_spray_chart.png")
 
-# -------------------------
-# 3. Exit velo vs launch angle
-# -------------------------
+# ── 3. Exit velo vs launch angle ───────────────────────────────────────────────
+
 message("Generating exit velo vs launch angle scatter...")
 
-# Quadrant annotations for casual readers
 quadrant_labels <- data.frame(
   x     = c(-35,  5,  17, 55),
   y     = c(105, 68, 113, 68),
@@ -232,19 +235,20 @@ p3 <- batted_balls |>
     team_side = case_when(
       home_team == "CWS" & inning_topbot == "Bot" ~ "CWS Batter",
       away_team == "CWS" & inning_topbot == "Top" ~ "CWS Batter",
-      TRUE ~ "Opponent Batter"
+      TRUE                                        ~ "Opponent Batter"
     )
   ) |>
   ggplot(aes(x = launch_angle, y = launch_speed, colour = bb_type, shape = team_side)) +
-  annotate("rect", xmin = 10, xmax = 50, ymin = 95, ymax = Inf,
+  annotate("rect",
+           xmin = 10, xmax = 50, ymin = 95, ymax = Inf,
            fill = "#FFF9C4", alpha = 0.5) +
   geom_point(alpha = 0.75, size = 3) +
-  geom_vline(xintercept = c(10, 50), linetype = "dashed",
-             colour = "grey70", linewidth = 0.4) +
-  geom_hline(yintercept = 95, linetype = "dashed",
-             colour = "grey70", linewidth = 0.4) +
+  geom_vline(xintercept = c(10, 50),
+             linetype = "dashed", colour = "grey70", linewidth = 0.4) +
+  geom_hline(yintercept = 95,
+             linetype = "dashed", colour = "grey70", linewidth = 0.4) +
   geom_text(
-    data     = quadrant_labels,
+    data        = quadrant_labels,
     aes(x = x, y = y, label = label),
     inherit.aes = FALSE,
     size        = 3.2,
@@ -282,9 +286,8 @@ p3 <- batted_balls |>
 
 save_plot(p3, "03_exit_velo_launch_angle.png")
 
-# -------------------------
-# 4. Exit velo distribution
-# -------------------------
+# ── 4. Exit velo distribution ──────────────────────────────────────────────────
+
 message("Generating exit velo distribution...")
 
 ev_data <- batted_balls |>
@@ -293,13 +296,15 @@ ev_data <- batted_balls |>
     team_side = case_when(
       home_team == "CWS" & inning_topbot == "Bot" ~ "White Sox",
       away_team == "CWS" & inning_topbot == "Top" ~ "White Sox",
-      TRUE ~ latest_game$opponent
+      TRUE                                        ~ latest_game$opponent
     )
   )
 
 ev_means <- ev_data |>
   group_by(team_side) |>
-  summarise(mean_ev = round(mean(launch_speed), 1), .groups = "drop")
+  summarise(mean_ev = round(mean(launch_speed), 1), .groups = "drop") |>
+  arrange(mean_ev) |>
+  mutate(label_y = c(0.021, 0.028))  # lower team gets lower label
 
 p4 <- ggplot(ev_data, aes(x = launch_speed, fill = team_side, colour = team_side)) +
   geom_density(alpha = 0.35, linewidth = 0.9) +
@@ -310,21 +315,29 @@ p4 <- ggplot(ev_data, aes(x = launch_speed, fill = team_side, colour = team_side
     linewidth = 1
   ) +
   geom_label(
-    data        = ev_means,
-    aes(x = mean_ev, y = 0.028, label = paste0(team_side, "\navg: ", mean_ev, " mph"),
-        colour = team_side),
-    inherit.aes = FALSE,
-    size        = 3.8,
-    fontface    = "bold",
-    fill        = "white",
-    label.size  = 0.3,
-    label.padding = unit(0.3, "lines")
-  ) +
-  scale_fill_manual(values   = c("White Sox" = "#27251F", setNames("#AAAAAA", latest_game$opponent))) +
-  scale_colour_manual(values = c("White Sox" = "#27251F", setNames("#888888", latest_game$opponent))) +
-  annotate("text", x = 95, y = 0.025, label = "Hard hit\nzone (95+ mph)",
-           size = 3.2, colour = "grey50", fontface = "italic") +
-  geom_vline(xintercept = 95, linetype = "dotted", colour = "grey60", linewidth = 0.6) +
+  data        = ev_means,
+  aes(x = mean_ev, y = label_y,
+      label  = paste0(team_side, "\navg: ", mean_ev, " mph"),
+      colour = team_side),
+  inherit.aes   = FALSE,
+  size          = 3.8,
+  fontface      = "bold",
+  fill          = "white",
+  label.size    = 0.3,
+  label.padding = unit(0.3, "lines")
+) +
+  geom_vline(xintercept = 95,
+             linetype = "dotted", colour = "grey60", linewidth = 0.6) +
+  annotate("text", x = 95, y = 0.025,
+           label    = "Hard hit\nzone (95+ mph)",
+           size     = 3.2,
+           colour   = "grey50",
+           fontface = "italic",
+           hjust    = -0.1) +
+  scale_fill_manual(values   = c("White Sox" = "#27251F",
+                                 setNames("#AAAAAA", latest_game$opponent))) +
+  scale_colour_manual(values = c("White Sox" = "#27251F",
+                                 setNames("#888888", latest_game$opponent))) +
   theme_minimal(base_size = 13) +
   theme(
     legend.position  = "none",
@@ -345,32 +358,14 @@ p4 <- ggplot(ev_data, aes(x = launch_speed, fill = team_side, colour = team_side
 
 save_plot(p4, "04_exit_velo_distribution.png")
 
-# -------------------------
-# 5. Hard hit leaderboard
-# -------------------------
+# ── 5. Hard hit leaderboard ────────────────────────────────────────────────────
+
 message("Generating hard hit rate leaderboard...")
 
-cws_roster <- batting_orders <- dbGetQuery(
-  dbConnect(
-    RPostgres::Postgres(),
-    dbname = "baseball_statcast", host = "localhost",
-    port = 5432, user = "postgres", password = Sys.getenv("PGPASSWORD")
-  ),
-  "SELECT full_name, team_id FROM players WHERE team_id = 145"
-)
-
-con2 <- dbConnect(
-  RPostgres::Postgres(),
-  dbname   = "baseball_statcast",
-  host     = "localhost",
-  port     = 5432,
-  user     = "postgres",
-  password = Sys.getenv("PGPASSWORD")
-)
-cws_players <- dbGetQuery(con2, "SELECT full_name FROM players WHERE team_id = 145")
-dbDisconnect(con2)
-
-cws_name_list <- cws_players$full_name
+format_name <- function(n) {
+  parts <- strsplit(n, ", ")[[1]]
+  if (length(parts) == 2) paste(parts[2], parts[1]) else n
+}
 
 leaderboard <- batted_balls |>
   filter(!is.na(launch_speed)) |>
@@ -386,19 +381,12 @@ leaderboard <- batted_balls |>
   arrange(desc(hard_hit_pct)) |>
   slice_head(n = 15) |>
   mutate(
-    # Convert "Last, First" to "First Last" for readability
-    display_name = sapply(player_name, function(n) {
-      parts <- strsplit(n, ", ")[[1]]
-      if (length(parts) == 2) paste(parts[2], parts[1]) else n
-    }),
+    display_name = sapply(player_name, format_name),
     display_name = reorder(display_name, hard_hit_pct),
     team_side    = if_else(
-      sapply(player_name, function(n) {
-        parts <- strsplit(n, ", ")[[1]]
-        full  <- if (length(parts) == 2) paste(parts[2], parts[1]) else n
-        full %in% cws_name_list
-      }),
-      "White Sox", latest_game$opponent
+      sapply(player_name, format_name) %in% cws_name_list,
+      "White Sox",
+      latest_game$opponent
     )
   )
 
@@ -406,13 +394,14 @@ p5 <- ggplot(leaderboard,
              aes(x = hard_hit_pct, y = display_name, fill = team_side)) +
   geom_col(alpha = 0.9, width = 0.7) +
   geom_text(
-    aes(label = paste0(round(hard_hit_pct), "% (", hard_hit_count, "/", batted_balls_n, ")")),
+    aes(label = paste0(round(hard_hit_pct), "% (",
+                       hard_hit_count, "/", batted_balls_n, ")")),
     hjust  = -0.1,
     size   = 3.5,
     colour = "grey30"
   ) +
   scale_fill_manual(values = c(
-    "White Sox"             = "#27251F",
+    "White Sox" = "#27251F",
     setNames("#C4CED4", latest_game$opponent)
   )) +
   scale_x_continuous(
@@ -441,6 +430,8 @@ p5 <- ggplot(leaderboard,
   )
 
 save_plot(p5, "05_hard_hit_leaderboard.png")
+
+# ── Done ───────────────────────────────────────────────────────────────────────
 
 message("All visuals saved to: ", out_dir)
 message("Visualise complete.")
