@@ -158,6 +158,54 @@ if (up_to_date) {
   saveRDS(batted_balls_raw,    "data/raw/batted_balls_raw.rds")
   saveRDS(cws_schedule,        "data/raw/schedule_raw.rds")
 
+  saveRDS(game_info_raw,       "data/raw/game_info_raw.rds")
+  saveRDS(linescore_raw,       "data/raw/linescore_raw.rds")
+  saveRDS(batting_orders_raw,  "data/raw/batting_orders_raw.rds")
+  saveRDS(batted_balls_raw,    "data/raw/batted_balls_raw.rds")
+  saveRDS(cws_schedule,        "data/raw/schedule_raw.rds")
+
+  # -------------------------
+  # 6. Batting game logs (FanGraphs)
+  # -------------------------
+  message("Pulling CWS batting game logs...")
+  season <- as.integer(format(Sys.Date(), "%Y"))
+
+  batting_logs_raw <- tryCatch({
+    logs <- fg_batter_game_logs(
+      playerid   = NULL,
+      year       = season,
+      which_type = "mlb"
+    ) |>
+      filter(Team == "CWS")
+    message("Batting log rows: ", nrow(logs))
+    logs
+  }, error = function(e) {
+    message("Batting logs failed: ", e$message)
+    NULL
+  })
+
+  # -------------------------
+  # 7. Pitching game logs (FanGraphs)
+  # -------------------------
+  message("Pulling CWS pitching game logs...")
+
+  pitching_logs_raw <- tryCatch({
+    logs <- fg_pitcher_game_logs(
+      playerid   = NULL,
+      year       = season,
+      which_type = "mlb"
+    ) |>
+      filter(Team == "CWS")
+    message("Pitching log rows: ", nrow(logs))
+    logs
+  }, error = function(e) {
+    message("Pitching logs failed: ", e$message)
+    NULL
+  })
+
+  saveRDS(batting_logs_raw,  "data/raw/batting_logs_raw.rds")
+  saveRDS(pitching_logs_raw, "data/raw/pitching_logs_raw.rds")
+
   message("All raw extracts saved to data/raw/")
   message("Extract complete.")
 

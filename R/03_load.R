@@ -12,6 +12,8 @@ games        <- readRDS("data/processed/games.rds")
 players      <- readRDS("data/processed/players.rds")
 batted_balls <- readRDS("data/processed/batted_balls.rds")
 linescore    <- readRDS("data/processed/linescore.rds")
+batting_logs  <- readRDS("data/processed/batting_logs.rds")
+pitching_logs <- readRDS("data/processed/pitching_logs.rds")
 
 # -------------------------
 # Database connection
@@ -141,6 +143,59 @@ dbExecute(con, "
 
 message("Tables created (if not already existing)")
 
+dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS batting_logs (
+    player_name  TEXT,
+    player_id    INTEGER,
+    team         TEXT,
+    game_date    DATE,
+    opponent     TEXT,
+    home_game    BOOLEAN,
+    ab           INTEGER,
+    pa           INTEGER,
+    h            INTEGER,
+    doubles      INTEGER,
+    triples      INTEGER,
+    hr           INTEGER,
+    rbi          INTEGER,
+    bb           INTEGER,
+    k            INTEGER,
+    sb           INTEGER,
+    avg          NUMERIC,
+    obp          NUMERIC,
+    slg          NUMERIC,
+    ops          NUMERIC,
+    woba         NUMERIC,
+    wrc_plus     INTEGER,
+    PRIMARY KEY (player_id, game_date)
+  )
+")
+
+dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS pitching_logs (
+    player_name  TEXT,
+    player_id    INTEGER,
+    team         TEXT,
+    game_date    DATE,
+    opponent     TEXT,
+    home_game    BOOLEAN,
+    gs           INTEGER,
+    ip           NUMERIC,
+    h            INTEGER,
+    er           INTEGER,
+    hr           INTEGER,
+    bb           INTEGER,
+    k            INTEGER,
+    era          NUMERIC,
+    whip         NUMERIC,
+    k_per_9      NUMERIC,
+    bb_per_9     NUMERIC,
+    fip          NUMERIC,
+    game_score   NUMERIC,
+    PRIMARY KEY (player_id, game_date)
+  )
+")
+
 # -------------------------
 # Helper: upsert rows safely
 # -------------------------
@@ -180,6 +235,8 @@ games$home_team_id    <- as.integer(games$home_team_id)
 games$away_team_id    <- as.integer(games$away_team_id)
 linescore$home_team_id <- as.integer(linescore$home_team_id)
 linescore$away_team_id <- as.integer(linescore$away_team_id)
+batting_logs  <- as.data.frame(batting_logs)
+pitching_logs <- as.data.frame(pitching_logs)
 
 # -------------------------
 # Load each table
@@ -187,6 +244,8 @@ linescore$away_team_id <- as.integer(linescore$away_team_id)
 upsert_table(con, "games",        games,        "game_pk")
 upsert_table(con, "players",      players,      "player_id")
 upsert_table(con, "linescore",    linescore,    c("game_pk", "inning"))
+upsert_table(con, "batting_logs",  batting_logs,  c("player_id", "game_date"))
+upsert_table(con, "pitching_logs", pitching_logs, c("player_id", "game_date"))
 # Drop and recreate batted_balls to match actual columns
 dbExecute(con, "DROP TABLE IF EXISTS batted_balls")
 dbWriteTable(con, "batted_balls", batted_balls, overwrite = TRUE)
@@ -203,13 +262,17 @@ dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_hard_hit   ON batted_balls (ha
 dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_barrel     ON batted_balls (barrel)")
 dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_ls_game_pk    ON linescore (game_pk)")
 dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_games_date    ON games (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bat_logs_date ON batting_logs (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bat_logs_pid  ON batting_logs (player_id)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pit_logs_date ON pitching_logs (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pit_logs_pid  ON pitching_logs (player_id)")
 
 message("Indexes created")
 
 # -------------------------
 # Quick row count verification
 # -------------------------
-tables <- c("games", "players", "linescore", "batted_balls")
+tables <- c("games", "players", "linescore", "batted_balls", "batting_logs", "pitching_logs")
 for (t in tables) {
   n <- dbGetQuery(con, paste0("SELECT COUNT(*) as n FROM ", t))$n
   message(t, ": ", n, " rows in database")

@@ -1,12 +1,3 @@
-# Orchestrates the full ETL pipeline
-# Run this script after every CWS game to update the database
-
-# Pipeline:
-#   01_extract.R   — pull new data from Baseball Savant + MLB API
-#   02_transform.R — clean and reshape into analysis-ready tables
-#   03_load.R      — load into PostgreSQL with deduplication
-#   05_visualise.R — generate game visuals and save to outputs/visuals/
-
 message("========================================")
 message("  CWS Baseball ETL Pipeline")
 message("  Run time: ", Sys.time())
@@ -26,47 +17,46 @@ tryCatch(
   }
 )
 
-# -------------------------
-# Step 2: Transform
-# -------------------------
-message("\n--- STEP 2: TRANSFORM ---")
-tryCatch(
-  source("R/02_transform.R"),
-  error = function(e) {
-    message("TRANSFORM FAILED: ", e$message)
-    stop(e)
-  }
-)
+pipeline_status <- readLines("data/raw/pipeline_status.txt")
 
-# -------------------------
-# Step 3: Load
-# -------------------------
-message("\n--- STEP 3: LOAD ---")
-tryCatch(
-  source("R/03_load.R"),
-  error = function(e) {
-    message("LOAD FAILED: ", e$message)
-    stop(e)
-  }
-)
+if (pipeline_status == "skip") {
 
-# -------------------------
-# Step 4: Visualise
-# -------------------------
-message("\n--- STEP 4: VISUALISE ---")
-tryCatch(
-  source("R/05_visualize.R"),
-  error = function(e) {
-    message("VISUALISE FAILED: ", e$message)
-    stop(e)
-  }
-)
+  message("\nNo new games since last run. Skipping transform, load, and visualise.")
 
-# -------------------------
-# Done
-# -------------------------
+} else {
+
+  message("\n--- STEP 2: TRANSFORM ---")
+  tryCatch(
+    source("R/02_transform.R"),
+    error = function(e) {
+      message("TRANSFORM FAILED: ", e$message)
+      stop(e)
+    }
+  )
+
+  message("\n--- STEP 3: LOAD ---")
+  tryCatch(
+    source("R/03_load.R"),
+    error = function(e) {
+      message("LOAD FAILED: ", e$message)
+      stop(e)
+    }
+  )
+
+  message("\n--- STEP 4: VISUALISE ---")
+  tryCatch(
+    source("R/05_visualize.R"),
+    error = function(e) {
+      message("VISUALISE FAILED: ", e$message)
+      stop(e)
+    }
+  )
+
+}
+
 elapsed <- round(difftime(Sys.time(), start_time, units = "mins"), 1)
 message("\n========================================")
 message("  Pipeline complete in ", elapsed, " mins")
 message("  ", Sys.time())
 message("========================================")
+
