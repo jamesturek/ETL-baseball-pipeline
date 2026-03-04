@@ -1,0 +1,14 @@
+﻿# Data files
+data/raw/
+data/processed/
+
+# Output visuals
+outputs/
+
+# R environment
+.Renviron
+.Rhistory
+.RData
+
+# PostgreSQL credentials
+*.env
