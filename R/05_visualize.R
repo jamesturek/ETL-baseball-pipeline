@@ -90,12 +90,13 @@ field_layers <- function(stadium) {
 }
 
 hit_colours <- scale_colour_manual(
+  breaks = c("Single", "Double", "Triple", "Home Run", "Out"),
   values = c(
     "Single"   = "#2196F3",
-    "Double"   = "#4CAF50",
+    "Double"   = "#00C853",
     "Triple"   = "#FF9800",
     "Home Run" = "#F44336",
-    "Out"      = "grey75"
+    "Out"      = "#B0BEC5"
   )
 )
 
@@ -150,10 +151,22 @@ library(mlbplotR)
 library(png)
 library(RCurl)
 
-logo_watermark <- function(team_abbr) {
-  url <- paste0("https://a.espncdn.com/i/teamlogos/mlb/500/", tolower(team_abbr), ".png")
+team_id_to_espn <- c(
+  "108" = "laa", "109" = "ari", "110" = "bal", "111" = "bos",
+  "112" = "chc", "113" = "cin", "114" = "cle", "115" = "col",
+  "116" = "det", "117" = "hou", "118" = "kc",  "119" = "lad",
+  "120" = "wsh", "121" = "nym", "133" = "oak", "134" = "pit",
+  "135" = "sd",  "136" = "sea", "137" = "sf",  "138" = "stl",
+  "139" = "tb",  "140" = "tex", "141" = "tor", "142" = "min",
+  "143" = "phi", "144" = "atl", "145" = "chw", "146" = "mia",
+  "147" = "nyy", "158" = "mil"
+)
+
+logo_watermark <- function(team_id) {
+  espn <- team_id_to_espn[as.character(team_id)]
+  url  <- paste0("https://a.espncdn.com/i/teamlogos/mlb/500/", espn, ".png")
   annotation_custom(
-    grob   = grid::rasterGrob(
+    grob = grid::rasterGrob(
       png::readPNG(RCurl::getURLContent(url)),
       interpolate = TRUE,
       width       = unit(1.2, "inches"),
@@ -226,14 +239,21 @@ p1 <- ggplot(cws_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
   field_layers(stadium_id) +
   infield_markers +
   geom_spraychart(
-    stadium_ids              = stadium_id,
-    stadium_transform_coords = TRUE,
-    size                     = 4,
-    alpha                    = 0.85
-  ) +
+  stadium_ids              = stadium_id,
+  stadium_transform_coords = TRUE,
+  size                     = 4.8,
+  alpha                    = 1,
+  colour                   = "black"
+) +
+geom_spraychart(
+  stadium_ids              = stadium_id,
+  stadium_transform_coords = TRUE,
+  size                     = 4,
+  alpha                    = 0.85
+) +
   hit_labels() +
   hit_colours +
-  logo_watermark("CWS") +
+  logo_watermark(145) +
   coord_fixed(clip = "off") +    # <-- changed
   theme_spray() +
   labs(
@@ -260,19 +280,28 @@ opp_batted <- batted_balls |>
   select(-hc_x, -hc_y) |>
   rename(hc_x = hc_x_, hc_y = hc_y_)
 
+opp_id <- if (latest_game$cws_home) latest_game$away_team_id else latest_game$home_team_id
+
 p2 <- ggplot(opp_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
   field_layers(stadium_id) +
   infield_markers +
   geom_spraychart(
-    stadium_ids              = stadium_id,
-    stadium_transform_coords = TRUE,
-    size                     = 4,
-    alpha                    = 0.85
-  ) +
+  stadium_ids              = stadium_id,
+  stadium_transform_coords = TRUE,
+  size                     = 4.8,
+  alpha                    = 1,
+  colour                   = "black"
+) +
+geom_spraychart(
+  stadium_ids              = stadium_id,
+  stadium_transform_coords = TRUE,
+  size                     = 4,
+  alpha                    = 0.85
+) +
   hit_labels() +
   hit_colours +
-  logo_watermark(latest_game$opponent_abbr) +   # <-- opponent logo
-  coord_fixed() +
+  logo_watermark(opp_id) +
+  coord_fixed(clip = "off") +
   theme_spray() +
   labs(
     title    = paste0("Where Did ", latest_game$opponent, " Hit the Ball?"),
