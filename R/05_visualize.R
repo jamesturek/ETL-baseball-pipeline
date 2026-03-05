@@ -146,6 +146,48 @@ add_hit_result <- function(df) {
     )
 }
 
+# ── Infield markers ────────────────────────────────────────────────────────────
+
+bases <- tibble(
+  label = c("Home", "1B",  "2B",  "3B"),
+  hc_x  = c(125,    153,   124,    97),
+  hc_y  = c(208,    172,   135,   172)
+) |>
+  mlbam_xy_transformation() |>
+  select(label, hc_x = hc_x_, hc_y = hc_y_)
+
+diamond_path <- bases[c(1, 2, 3, 4), ]
+
+infield_markers <- list(
+  geom_polygon(
+    data        = diamond_path,
+    aes(x = hc_x, y = hc_y),
+    inherit.aes = FALSE,
+    fill        = NA,
+    colour      = "white",
+    linewidth   = 0.6,
+    linetype    = "dashed"
+  ),
+  geom_point(
+    data        = bases |> filter(label != "Home"),
+    aes(x = hc_x, y = hc_y),
+    inherit.aes = FALSE,
+    shape       = 22,
+    size        = 5,
+    fill        = "white",
+    colour      = "white"
+  ),
+  geom_point(
+    data        = bases |> filter(label == "Home"),
+    aes(x = hc_x, y = hc_y),
+    inherit.aes = FALSE,
+    shape       = 23,
+    size        = 3.5,
+    fill        = "white",
+    colour      = "white"
+  )
+)
+
 # ── 1. CWS spray chart ─────────────────────────────────────────────────────────
 
 message("Generating CWS spray chart...")
@@ -164,6 +206,7 @@ cws_batted <- batted_balls |>
 
 p1 <- ggplot(cws_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
   field_layers(stadium_id) +
+  infield_markers +
   geom_spraychart(
     stadium_ids              = stadium_id,
     stadium_transform_coords = TRUE,
@@ -200,6 +243,7 @@ opp_batted <- batted_balls |>
 
 p2 <- ggplot(opp_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
   field_layers(stadium_id) +
+  infield_markers +
   geom_spraychart(
     stadium_ids              = stadium_id,
     stadium_transform_coords = TRUE,
@@ -304,7 +348,7 @@ ev_means <- ev_data |>
   group_by(team_side) |>
   summarise(mean_ev = round(mean(launch_speed), 1), .groups = "drop") |>
   arrange(mean_ev) |>
-  mutate(label_y = c(0.021, 0.028))  # lower team gets lower label
+  mutate(label_y = c(0.021, 0.028))
 
 p4 <- ggplot(ev_data, aes(x = launch_speed, fill = team_side, colour = team_side)) +
   geom_density(alpha = 0.35, linewidth = 0.9) +
@@ -315,17 +359,17 @@ p4 <- ggplot(ev_data, aes(x = launch_speed, fill = team_side, colour = team_side
     linewidth = 1
   ) +
   geom_label(
-  data        = ev_means,
-  aes(x = mean_ev, y = label_y,
-      label  = paste0(team_side, "\navg: ", mean_ev, " mph"),
-      colour = team_side),
-  inherit.aes   = FALSE,
-  size          = 3.8,
-  fontface      = "bold",
-  fill          = "white",
-  label.size    = 0.3,
-  label.padding = unit(0.3, "lines")
-) +
+    data        = ev_means,
+    aes(x = mean_ev, y = label_y,
+        label  = paste0(team_side, "\navg: ", mean_ev, " mph"),
+        colour = team_side),
+    inherit.aes   = FALSE,
+    size          = 3.8,
+    fontface      = "bold",
+    fill          = "white",
+    label.size    = 0.3,
+    label.padding = unit(0.3, "lines")
+  ) +
   geom_vline(xintercept = 95,
              linetype = "dotted", colour = "grey60", linewidth = 0.6) +
   annotate("text", x = 95, y = 0.025,
