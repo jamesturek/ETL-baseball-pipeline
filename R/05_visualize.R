@@ -109,7 +109,7 @@ theme_spray <- function() {
       plot.subtitle    = element_text(size = 11, hjust = 0.5, colour = "grey40"),
       plot.caption     = element_text(size = 9, colour = "grey60", hjust = 0.5),
       plot.background  = element_rect(fill = "white", colour = NA),
-      plot.margin      = margin(10, 10, 10, 10)
+      plot.margin      = margin(10, 40, 40, 10)   # increased right margin from 10 to 50
     )
 }
 
@@ -144,6 +144,24 @@ add_hit_result <- function(df) {
         NA_character_
       )
     )
+}
+
+library(mlbplotR)
+library(png)
+library(RCurl)
+
+logo_watermark <- function(team_abbr) {
+  url <- paste0("https://a.espncdn.com/i/teamlogos/mlb/500/", tolower(team_abbr), ".png")
+  annotation_custom(
+    grob   = grid::rasterGrob(
+      png::readPNG(RCurl::getURLContent(url)),
+      interpolate = TRUE,
+      width       = unit(1.2, "inches"),
+      height      = unit(1.2, "inches")
+    ),
+    xmin = Inf, xmax = Inf,
+    ymin = -Inf, ymax = -Inf
+  )
 }
 
 # ── Infield markers ────────────────────────────────────────────────────────────
@@ -215,7 +233,8 @@ p1 <- ggplot(cws_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
   ) +
   hit_labels() +
   hit_colours +
-  coord_fixed() +
+  logo_watermark("CWS") +
+  coord_fixed(clip = "off") +    # <-- changed
   theme_spray() +
   labs(
     title    = "Where Did the White Sox Hit the Ball?",
@@ -252,6 +271,7 @@ p2 <- ggplot(opp_batted, aes(x = hc_x, y = hc_y, colour = hit_result)) +
   ) +
   hit_labels() +
   hit_colours +
+  logo_watermark(latest_game$opponent_abbr) +   # <-- opponent logo
   coord_fixed() +
   theme_spray() +
   labs(
