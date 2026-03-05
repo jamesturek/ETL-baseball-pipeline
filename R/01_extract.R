@@ -31,8 +31,13 @@ con <- dbConnect(
 # -------------------------
 if (dbExistsTable(con, "batted_balls")) {
   last_date  <- dbGetQuery(con, "SELECT MAX(game_date) AS last_date FROM batted_balls")$last_date
-  start_date <- as.character(as.Date(last_date) + 1)
-  message("Incremental run: pulling from ", start_date)
+  if (is.na(last_date)) {
+    start_date <- "2026-03-03"
+    message("Table exists but is empty. Starting from: ", start_date)
+  } else {
+    start_date <- as.character(as.Date(last_date) + 1)
+    message("Incremental run: pulling from ", start_date)
+  }
 } else {
   start_date <- "2026-03-03"
   message("First run: pulling from ", start_date)
@@ -149,6 +154,20 @@ if (up_to_date) {
   message("Batted ball events extracted: ", nrow(batted_balls_raw))
 
   # -------------------------
+  # 5b. Full pitch-by-pitch data
+  # -------------------------
+  message("Pulling CWS full pitch-by-pitch data...")
+  cws_pitches <- map_dfr(date_chunks, pull_statcast, team = "CWS", player_type = "batter")
+
+  message("Pulling opponent full pitch-by-pitch data...")
+  opp_pitches <- map_dfr(date_chunks, pull_statcast, team = "CWS", player_type = "pitcher")
+
+  pitches_raw <- bind_rows(cws_pitches, opp_pitches) |>
+    distinct(game_pk, at_bat_number, pitch_number, .keep_all = TRUE)
+
+  message("Total pitches extracted: ", nrow(pitches_raw))
+
+  # -------------------------
   # 6. Batting game logs (FanGraphs)
   # -------------------------
   message("Pulling CWS batting game logs...")
@@ -195,6 +214,7 @@ if (up_to_date) {
   saveRDS(batting_orders_raw, "data/raw/batting_orders_raw.rds")
   saveRDS(batted_balls_raw,   "data/raw/batted_balls_raw.rds")
   saveRDS(cws_schedule,       "data/raw/schedule_raw.rds")
+  saveRDS(pitches_raw,        "data/raw/pitches_raw.rds")
   if (!is.null(batting_logs_raw))  saveRDS(batting_logs_raw,  "data/raw/batting_logs_raw.rds")
   if (!is.null(pitching_logs_raw)) saveRDS(pitching_logs_raw, "data/raw/pitching_logs_raw.rds")
 
@@ -204,3 +224,4 @@ if (up_to_date) {
   message("Extract complete.")
 
 } # end if/else up_to_date
+

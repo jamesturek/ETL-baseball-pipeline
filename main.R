@@ -53,13 +53,37 @@ if (pipeline_status == "skip") {
   # Step 4: Visualise
   # -------------------------
   message("\n--- STEP 4: VISUALISE ---")
+
+  run_date <- format(Sys.Date(), "%Y-%m-%d")
+  out_dir  <- file.path("outputs", "visuals", run_date)
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  message("Saving visuals to: ", out_dir)
+
   tryCatch(
     source("R/05_visualize.R"),
     error = function(e) {
-      message("VISUALISE FAILED: ", e$message)
+      message("VISUALISE (spray charts) FAILED: ", e$message)
       stop(e)
     }
   )
+
+  tryCatch(
+    source("R/06_boxscore.R"),
+    error = function(e) {
+      message("VISUALISE (box score) FAILED: ", e$message)
+      stop(e)
+    }
+  )
+
+  tryCatch(
+    source("R/07_strike_zone.R"),
+    error = function(e) {
+      message("VISUALISE (strike zone) FAILED: ", e$message)
+      stop(e)
+    }
+  )
+
+  message("All visuals complete.")
 
 } # end if new data
 
@@ -71,5 +95,3 @@ message("\n========================================")
 message("  Pipeline complete in ", elapsed, " mins")
 message("  ", Sys.time())
 message("========================================")
-
-source("main.R")

@@ -1,5 +1,5 @@
 # Transform raw extracts into clean, analysis-ready tables
-# Produces: games, players, batted_balls, linescore
+# Produces: games, players, batted_balls, linescore, pitches
 
 library(dplyr)
 library(lubridate)
@@ -13,8 +13,9 @@ game_info_raw      <- readRDS("data/raw/game_info_raw.rds")
 linescore_raw      <- readRDS("data/raw/linescore_raw.rds")
 batting_orders_raw <- readRDS("data/raw/batting_orders_raw.rds")
 schedule_raw       <- readRDS("data/raw/schedule_raw.rds")
-batting_logs_raw  <- if (file.exists("data/raw/batting_logs_raw.rds"))  readRDS("data/raw/batting_logs_raw.rds")  else NULL
-pitching_logs_raw <- if (file.exists("data/raw/pitching_logs_raw.rds")) readRDS("data/raw/pitching_logs_raw.rds") else NULL
+pitches_raw        <- if (file.exists("data/raw/pitches_raw.rds")) readRDS("data/raw/pitches_raw.rds") else NULL
+batting_logs_raw   <- if (file.exists("data/raw/batting_logs_raw.rds"))  readRDS("data/raw/batting_logs_raw.rds")  else NULL
+pitching_logs_raw  <- if (file.exists("data/raw/pitching_logs_raw.rds")) readRDS("data/raw/pitching_logs_raw.rds") else NULL
 
 # -------------------------
 # CWS game_pks only
@@ -26,7 +27,6 @@ cws_game_pks <- schedule_raw$game_pk
 # -------------------------
 message("Transforming games table...")
 
-# Aggregate linescore to get final scores per game
 final_scores <- linescore_raw |>
   group_by(game_pk) |>
   summarise(
@@ -74,8 +74,8 @@ games <- game_info_raw |>
     game_type
   ) |>
   mutate(
-    game_date  = as.Date(game_date),
-    attendance = as.integer(gsub(",", "", attendance)),
+    game_date   = as.Date(game_date),
+    attendance  = as.integer(gsub(",", "", attendance)),
     temperature = as.integer(gsub("[^0-9]", "", temperature))
   )
 
@@ -88,11 +88,11 @@ message("Transforming players table...")
 
 players <- batting_orders_raw |>
   select(
-    player_id    = id,
-    full_name    = fullName,
-    position     = abbreviation,
-    team         = teamName,
-    team_id      = teamID
+    player_id = id,
+    full_name  = fullName,
+    position   = abbreviation,
+    team       = teamName,
+    team_id    = teamID
   ) |>
   distinct(player_id, .keep_all = TRUE)
 
@@ -103,7 +103,6 @@ message("Players rows: ", nrow(players))
 # -------------------------
 message("Transforming batted balls table...")
 
-# Columns to drop: fully NA or deprecated
 drop_cols <- c(
   "spin_dir", "spin_rate_deprecated", "break_angle_deprecated",
   "break_length_deprecated", "tfs_deprecated", "tfs_zulu_deprecated",
@@ -120,24 +119,19 @@ batted_balls <- batted_balls_raw |>
   filter(game_pk %in% cws_game_pks) |>
   select(-any_of(drop_cols)) |>
   mutate(
-    # Derive spray angle from hc_x and hc_y (standard baseball convention)
     spray_angle = round(
       atan((hc_x - 125.42) / (198.27 - hc_y)) * (180 / pi) * 0.75,
       1
     ),
-    # Classify spray direction
     spray_zone = case_when(
       spray_angle < -15 ~ "pull",
       spray_angle > 15  ~ "oppo",
       TRUE              ~ "center"
     ),
-    # Hard hit flag (exit velo >= 95 mph)
-    hard_hit = launch_speed >= 95,
-    # Barrel flag (per Statcast definition)
-    barrel = launch_speed_angle == 6,
-    # Clean up empty strings
-    bb_type  = na_if(bb_type, ""),
-    events   = na_if(events, ""),
+    hard_hit  = launch_speed >= 95,
+    barrel    = launch_speed_angle == 6,
+    bb_type   = na_if(bb_type, ""),
+    events    = na_if(events, ""),
     game_date = as.Date(game_date)
   ) |>
   clean_names()
@@ -145,7 +139,7 @@ batted_balls <- batted_balls_raw |>
 message("Batted ball rows: ", nrow(batted_balls))
 
 # -------------------------
-# 4. Linescore table (inning by inning)
+# 4. Linescore table
 # -------------------------
 message("Transforming linescore table...")
 
@@ -173,7 +167,47 @@ linescore <- linescore_raw |>
 message("Linescore rows: ", nrow(linescore))
 
 # -------------------------
-# 5. Batting game logs
+# 5. Pitches table
+# -------------------------
+if (!is.null(pitches_raw) && nrow(pitches_raw) > 0) {
+  message("Transforming pitches table...")
+
+  pitches <- pitches_raw |>
+    filter(game_pk %in% cws_game_pks) |>
+    select(-any_of(drop_cols)) |>
+    mutate(
+      game_date  = as.Date(game_date),
+      pitch_type = na_if(pitch_type, ""),
+      pitch_name = na_if(pitch_name, ""),
+      description = na_if(description, ""),
+      events      = na_if(events, ""),
+      # Classify pitch result
+      pitch_result = case_when(
+        description %in% c("called_strike", "swinging_strike",
+                            "swinging_strike_blocked", "foul_tip") ~ "Strike",
+        description %in% c("ball", "blocked_ball",
+                            "pitchout", "hit_by_pitch")             ~ "Ball",
+        description %in% c("foul", "foul_bunt")                    ~ "Foul",
+        description == "hit_into_play" & events == "home_run"       ~ "Home Run",
+        description == "hit_into_play" & events %in% c(
+          "single", "double", "triple")                             ~ "Hit",
+        description == "hit_into_play"                              ~ "Out",
+        TRUE                                                        ~ "Other"
+      ),
+      # Fastball velocity flag
+      elite_velo = pitch_type %in% c("FF", "SI", "FC") &
+                   release_speed >= 99
+    ) |>
+    clean_names()
+
+  message("Pitches rows: ", nrow(pitches))
+} else {
+  message("No pitch data available, skipping.")
+  pitches <- NULL
+}
+
+# -------------------------
+# 6. Batting game logs
 # -------------------------
 if (!is.null(batting_logs_raw) && nrow(batting_logs_raw) > 0) {
   message("Transforming batting game logs...")
@@ -217,7 +251,7 @@ if (!is.null(batting_logs_raw) && nrow(batting_logs_raw) > 0) {
 }
 
 # -------------------------
-# 6. Pitching game logs
+# 7. Pitching game logs
 # -------------------------
 if (!is.null(pitching_logs_raw) && nrow(pitching_logs_raw) > 0) {
   message("Transforming pitching game logs...")
@@ -264,9 +298,9 @@ saveRDS(games,        "data/processed/games.rds")
 saveRDS(players,      "data/processed/players.rds")
 saveRDS(batted_balls, "data/processed/batted_balls.rds")
 saveRDS(linescore,    "data/processed/linescore.rds")
+if (!is.null(pitches))       saveRDS(pitches,       "data/processed/pitches.rds")
 if (!is.null(batting_logs))  saveRDS(batting_logs,  "data/processed/batting_logs.rds")
 if (!is.null(pitching_logs)) saveRDS(pitching_logs, "data/processed/pitching_logs.rds")
 
 message("All transformed tables saved to data/processed/")
 message("Transform complete.")
-

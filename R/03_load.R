@@ -12,6 +12,7 @@ games        <- readRDS("data/processed/games.rds")
 players      <- readRDS("data/processed/players.rds")
 batted_balls <- readRDS("data/processed/batted_balls.rds")
 linescore    <- readRDS("data/processed/linescore.rds")
+pitches      <- if (file.exists("data/processed/pitches.rds")) readRDS("data/processed/pitches.rds") else NULL
 batting_logs  <- if (file.exists("data/processed/batting_logs.rds"))  readRDS("data/processed/batting_logs.rds")  else NULL
 pitching_logs <- if (file.exists("data/processed/pitching_logs.rds")) readRDS("data/processed/pitching_logs.rds") else NULL
 
@@ -142,6 +143,43 @@ dbExecute(con, "
 ")
 
 dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS pitches (
+    game_pk           BIGINT,
+    at_bat_number     INTEGER,
+    pitch_number      INTEGER,
+    game_date         DATE,
+    batter            BIGINT,
+    pitcher           BIGINT,
+    player_name       TEXT,
+    stand             TEXT,
+    p_throws          TEXT,
+    home_team         TEXT,
+    away_team         TEXT,
+    inning            INTEGER,
+    inning_topbot     TEXT,
+    pitch_type        TEXT,
+    pitch_name        TEXT,
+    release_speed     NUMERIC,
+    effective_speed   NUMERIC,
+    release_spin_rate NUMERIC,
+    spin_axis         NUMERIC,
+    zone              INTEGER,
+    plate_x           NUMERIC,
+    plate_z           NUMERIC,
+    sz_top            NUMERIC,
+    sz_bot            NUMERIC,
+    events            TEXT,
+    description       TEXT,
+    pitch_result      TEXT,
+    elite_velo        BOOLEAN,
+    balls             INTEGER,
+    strikes           INTEGER,
+    game_type         TEXT,
+    PRIMARY KEY (game_pk, at_bat_number, pitch_number)
+  )
+")
+
+dbExecute(con, "
   CREATE TABLE IF NOT EXISTS batting_logs (
     player_name  TEXT,
     player_id    INTEGER,
@@ -199,6 +237,9 @@ message("Tables created (if not already existing)")
 # -------------------------
 # Helper: upsert rows safely
 # -------------------------
+if (!requireNamespace("glue", quietly = TRUE)) install.packages("glue")
+library(glue)
+
 upsert_table <- function(con, table_name, data, conflict_cols) {
   if (nrow(data) == 0) {
     message("No rows to load for: ", table_name)
@@ -220,10 +261,6 @@ upsert_table <- function(con, table_name, data, conflict_cols) {
   message("Loaded ", rows_inserted, " new rows into: ", table_name)
 }
 
-# Install glue if needed
-if (!requireNamespace("glue", quietly = TRUE)) install.packages("glue")
-library(glue)
-
 # -------------------------
 # Coerce to data.frame
 # -------------------------
@@ -235,6 +272,7 @@ games$home_team_id     <- as.integer(games$home_team_id)
 games$away_team_id     <- as.integer(games$away_team_id)
 linescore$home_team_id <- as.integer(linescore$home_team_id)
 linescore$away_team_id <- as.integer(linescore$away_team_id)
+if (!is.null(pitches))       pitches       <- as.data.frame(pitches)
 if (!is.null(batting_logs))  batting_logs  <- as.data.frame(batting_logs)
 if (!is.null(pitching_logs)) pitching_logs <- as.data.frame(pitching_logs)
 
@@ -253,30 +291,45 @@ dbWriteTable(con, "batted_balls", batted_balls, overwrite = TRUE)
 dbExecute(con, "ALTER TABLE batted_balls ADD PRIMARY KEY (game_pk, at_bat_number, pitch_number)")
 message("Loaded ", nrow(batted_balls), " rows into: batted_balls")
 
+# Drop and recreate pitches to match actual columns
+if (!is.null(pitches)) {
+  dbExecute(con, "DROP TABLE IF EXISTS pitches")
+  dbWriteTable(con, "pitches", pitches, overwrite = TRUE)
+  dbExecute(con, "ALTER TABLE pitches ADD PRIMARY KEY (game_pk, at_bat_number, pitch_number)")
+  message("Loaded ", nrow(pitches), " rows into: pitches")
+}
+
 # -------------------------
-# Create indexes for fast querying
+# Create indexes
 # -------------------------
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_game_pk    ON batted_balls (game_pk)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_batter     ON batted_balls (batter)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_game_date  ON batted_balls (game_date)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_hard_hit   ON batted_balls (hard_hit)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_barrel     ON batted_balls (barrel)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_ls_game_pk    ON linescore (game_pk)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_games_date    ON games (game_date)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bat_logs_date ON batting_logs (game_date)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bat_logs_pid  ON batting_logs (player_id)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pit_logs_date ON pitching_logs (game_date)")
-dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pit_logs_pid  ON pitching_logs (player_id)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_game_pk      ON batted_balls (game_pk)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_batter       ON batted_balls (batter)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_game_date    ON batted_balls (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_hard_hit     ON batted_balls (hard_hit)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bb_barrel       ON batted_balls (barrel)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_ls_game_pk      ON linescore (game_pk)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_games_date      ON games (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bat_logs_date   ON batting_logs (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_bat_logs_pid    ON batting_logs (player_id)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pit_logs_date   ON pitching_logs (game_date)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pit_logs_pid    ON pitching_logs (player_id)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pitches_game_pk ON pitches (game_pk)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pitches_pitcher ON pitches (pitcher)")
+dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_pitches_date    ON pitches (game_date)")
 
 message("Indexes created")
 
 # -------------------------
 # Quick row count verification
 # -------------------------
-tables <- c("games", "players", "linescore", "batted_balls", "batting_logs", "pitching_logs")
+tables <- c("games", "players", "linescore", "batted_balls", "pitches", "batting_logs", "pitching_logs")
 for (t in tables) {
-  n <- dbGetQuery(con, paste0("SELECT COUNT(*) as n FROM ", t))$n
-  message(t, ": ", n, " rows in database")
+  tryCatch({
+    n <- dbGetQuery(con, paste0("SELECT COUNT(*) as n FROM ", t))$n
+    message(t, ": ", n, " rows in database")
+  }, error = function(e) {
+    message(t, ": table not found")
+  })
 }
 
 dbDisconnect(con)
