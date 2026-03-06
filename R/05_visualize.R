@@ -17,11 +17,11 @@ library(stringr)
 
 con <- dbConnect(
   RPostgres::Postgres(),
-  dbname   = "baseball_statcast",
-  host     = "localhost",
+  dbname   = "postgres",
+  host     = Sys.getenv("SUPA_HOST"),
   port     = 5432,
   user     = "postgres",
-  password = Sys.getenv("PGPASSWORD")
+  password = Sys.getenv("SUPA_PASSWORD")
 )
 
 batted_balls <- dbGetQuery(con, "SELECT * FROM batted_balls")

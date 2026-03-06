@@ -21,11 +21,11 @@ pitching_logs <- if (file.exists("data/processed/pitching_logs.rds")) readRDS("d
 # -------------------------
 con <- dbConnect(
   RPostgres::Postgres(),
-  dbname   = "baseball_statcast",
-  host     = "localhost",
+  dbname   = "postgres",
+  host     = Sys.getenv("SUPA_HOST"),
   port     = 5432,
   user     = "postgres",
-  password = Sys.getenv("PGPASSWORD")
+  password = Sys.getenv("SUPA_PASSWORD")
 )
 
 message("Connected to PostgreSQL: baseball_statcast")
