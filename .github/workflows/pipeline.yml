@@ -1,0 +1,48 @@
+name: CWS Baseball Pipeline
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 11am UTC = 6am Chicago time
+  workflow_dispatch:        # allows manual trigger from GitHub UI
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPA_HOST: ${{ secrets.SUPA_HOST }}
+      SUPA_PASSWORD: ${{ secrets.SUPA_PASSWORD }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev libcurl4-openssl-dev libssl-dev
+
+      - name: Install R packages
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::DBI
+            any::RPostgres
+            any::dplyr
+            any::lubridate
+            any::baseballr
+            any::httr
+            any::jsonlite
+            any::glue
+            any::stringr
+            any::purrr
+
+      - name: Run pipeline
+        run: Rscript main.R
