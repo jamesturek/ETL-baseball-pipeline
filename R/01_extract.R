@@ -148,9 +148,16 @@ if (up_to_date) {
   message("Pulling opponent batter Statcast data...")
   opp_batted <- map_dfr(date_chunks, pull_statcast, team = "CWS", player_type = "pitcher")
 
-  batted_balls_raw <- bind_rows(cws_batted, opp_batted) |>
-    filter(!is.na(launch_speed), !is.na(launch_angle)) |>
-    distinct(game_pk, at_bat_number, pitch_number, .keep_all = TRUE)
+  batted_combined <- bind_rows(cws_batted, opp_batted)
+
+  if (nrow(batted_combined) == 0 || !"launch_speed" %in% names(batted_combined)) {
+    message("No Statcast batted ball data available yet, skipping.")
+    batted_balls_raw <- tibble()
+  } else {
+    batted_balls_raw <- batted_combined |>
+      filter(!is.na(launch_speed), !is.na(launch_angle)) |>
+      distinct(game_pk, at_bat_number, pitch_number, .keep_all = TRUE)
+  }
 
   message("Batted ball events extracted: ", nrow(batted_balls_raw))
 
@@ -163,8 +170,15 @@ if (up_to_date) {
   message("Pulling opponent full pitch-by-pitch data...")
   opp_pitches <- map_dfr(date_chunks, pull_statcast, team = "CWS", player_type = "pitcher")
 
-  pitches_raw <- bind_rows(cws_pitches, opp_pitches) |>
-    distinct(game_pk, at_bat_number, pitch_number, .keep_all = TRUE)
+  pitches_combined <- bind_rows(cws_pitches, opp_pitches)
+
+  if (nrow(pitches_combined) == 0) {
+    message("No pitch-by-pitch data available yet, skipping.")
+    pitches_raw <- tibble()
+  } else {
+    pitches_raw <- pitches_combined |>
+      distinct(game_pk, at_bat_number, pitch_number, .keep_all = TRUE)
+  }
 
   message("Total pitches extracted: ", nrow(pitches_raw))
 
