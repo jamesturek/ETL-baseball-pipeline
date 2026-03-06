@@ -167,9 +167,9 @@ pitcher_ids <- batted_balls |>
 pitcher_names <- map_dfr(pitcher_ids, function(id) {
   tryCatch({
     p <- mlb_people(person_ids = id)
-    tibble(pitcher = id, player_name = p$full_name[1])
+    tibble(pitcher = as.numeric(p$id[1]), player_name = p$full_name[1])
   }, error = function(e) {
-    tibble(pitcher = id, player_name = NA_character_)
+    tibble(pitcher = as.numeric(id), player_name = NA_character_)
   })
 })
 
