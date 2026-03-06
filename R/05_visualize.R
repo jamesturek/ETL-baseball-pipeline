@@ -11,7 +11,7 @@ library(dplyr)
 library(ggplot2)
 library(ggrepel)
 library(GeomMLBStadiums)
-
+library(ggimage)
 # ── Connection ─────────────────────────────────────────────────────────────────
 
 con <- dbConnect(
@@ -150,6 +150,7 @@ add_hit_result <- function(df) {
 library(mlbplotR)
 library(png)
 library(RCurl)
+library(ggimage)
 
 team_id_to_espn <- c(
   "108" = "laa", "109" = "ari", "110" = "bal", "111" = "bos",
@@ -462,7 +463,7 @@ format_name <- function(n) {
 
 leaderboard <- batted_balls |>
   filter(!is.na(launch_speed)) |>
-  group_by(player_name) |>
+  group_by(player_name, batter) |>
   summarise(
     batted_balls_n = n(),
     hard_hit_count = sum(hard_hit, na.rm = TRUE),
@@ -474,12 +475,17 @@ leaderboard <- batted_balls |>
   arrange(desc(hard_hit_pct)) |>
   slice_head(n = 15) |>
   mutate(
-    display_name = sapply(player_name, format_name),
-    display_name = reorder(display_name, hard_hit_pct),
-    team_side    = if_else(
+    display_name  = sapply(player_name, format_name),
+    display_name  = reorder(display_name, hard_hit_pct),
+    team_side     = if_else(
       sapply(player_name, format_name) %in% cws_name_list,
       "White Sox",
       latest_game$opponent
+    ),
+    headshot_url  = paste0(
+      "https://img.mlbstatic.com/mlb-photos/image/upload/",
+      "d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/",
+      batter, "/headshot/67/current"
     )
   )
 
@@ -493,13 +499,20 @@ p5 <- ggplot(leaderboard,
     size   = 3.5,
     colour = "grey30"
   ) +
+  geom_image(
+    aes(x = -8, image = headshot_url),
+    size   = 0.034,
+    asp    = 1.25
+  ) +
   scale_fill_manual(values = c(
     "White Sox" = "#27251F",
     setNames("#C4CED4", latest_game$opponent)
   )) +
   scale_x_continuous(
-    limits = c(0, 105),
-    expand = expansion(mult = c(0, 0))
+    limits = c(-18, 105),
+    expand = expansion(mult = c(0, 0)),
+    breaks = c(0, 25, 50, 75, 100),
+    labels = c(0, 25, 50, 75, 100)
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -511,8 +524,9 @@ p5 <- ggplot(leaderboard,
     plot.caption       = element_text(size = 9, colour = "grey60"),
     panel.grid.minor   = element_blank(),
     panel.grid.major.y = element_blank(),
-    axis.text.y        = element_text(size = 11),
-    plot.background    = element_rect(fill = "white", colour = NA)
+    axis.text.y        = element_text(size = 11, margin = margin(r = 30)),
+    plot.background    = element_rect(fill = "white", colour = NA),
+    plot.margin        = margin(10, 20, 10, 20)
   ) +
   labs(
     title    = "Who Made the Hardest Contact?",
@@ -522,7 +536,7 @@ p5 <- ggplot(leaderboard,
     y        = NULL
   )
 
-save_plot(p5, "05_hard_hit_leaderboard.png")
+save_plot(p5, "05_hard_hit_leaderboard.png", width = 11, height = 9)
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 
