@@ -2,19 +2,18 @@ name: CWS Baseball Pipeline
 
 on:
   schedule:
-    - cron: '0 11 * * *'  # 11am UTC = 6am Chicago time
-  workflow_dispatch:        # allows manual trigger from GitHub UI
+    - cron: '0 11 * * *'
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
 
     env:
-  SUPA_HOST: ${{ secrets.SUPA_HOST }}
-  SUPA_PASSWORD: ${{ secrets.SUPA_PASSWORD }}
-  SUPA_PORT: ${{ secrets.SUPA_PORT }}
-  PGPASSWORD: ${{ secrets.PGPASSWORD }}
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SUPA_HOST: ${{ secrets.SUPA_HOST }}
+      SUPA_PASSWORD: ${{ secrets.SUPA_PASSWORD }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - name: Checkout repo
@@ -44,6 +43,9 @@ jobs:
             any::glue
             any::stringr
             any::purrr
+
+      - name: Debug host
+        run: echo "Host length is ${#SUPA_HOST}"
 
       - name: Run pipeline
         run: Rscript main.R
