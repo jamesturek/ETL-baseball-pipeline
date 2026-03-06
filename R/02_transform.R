@@ -28,6 +28,12 @@ if (length(cws_game_pks) == 0) {
   quit(save = "no", status = 0)
 }
 
+if (nrow(batted_balls_raw) == 0) {
+  message("No Statcast data available yet. Try again later - Statcast updates daily at 3am Eastern.")
+  writeLines("skip", "data/raw/pipeline_status.txt")
+  quit(save = "no", status = 0)
+}
+
 # -------------------------
 # 1. Games table
 # -------------------------

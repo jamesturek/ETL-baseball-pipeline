@@ -29,6 +29,7 @@ con <- dbConnect(
 batted_balls <- dbGetQuery(con, "SELECT * FROM batted_balls")
 linescore    <- dbGetQuery(con, "SELECT * FROM linescore")
 games        <- dbGetQuery(con, "SELECT * FROM games")
+pitches_raw  <- dbGetQuery(con, "SELECT * FROM pitches")
 
 dbDisconnect(con)
 
@@ -172,6 +173,21 @@ pitcher_names <- map_dfr(pitcher_ids, function(id) {
   })
 })
 
+out_events <- c(
+  "field_out", "strikeout", "strikeout_double_play", "grounded_into_double_play",
+  "force_out", "double_play", "triple_play", "fielders_choice_out",
+  "caught_stealing_2b", "caught_stealing_3b", "caught_stealing_home",
+  "pickoff_caught_stealing_2b", "pickoff_caught_stealing_3b",
+  "other_out", "sac_fly", "sac_bunt"
+)
+
+ip_by_pitcher <- pitches_raw |>
+  filter(game_pk == latest_game$game_pk, !is.na(events)) |>
+  mutate(is_out = events %in% out_events) |>
+  group_by(pitcher) |>
+  summarise(outs = sum(is_out, na.rm = TRUE), .groups = "drop") |>
+  mutate(IP = floor(outs / 3) + (outs %% 3) / 10)
+
 pitching <- batted_balls |>
   filter(game_pk == latest_game$game_pk) |>
   mutate(
@@ -182,7 +198,6 @@ pitching <- batted_balls |>
   ) |>
   group_by(pitcher, pitcher_team) |>
   summarise(
-    BF  = n_distinct(at_bat_number),
     H   = sum(events %in% c("single","double","triple","home_run"), na.rm = TRUE),
     ER  = sum(events %in% c("single","double","triple","home_run"), na.rm = TRUE),
     BB  = sum(events == "walk", na.rm = TRUE),
@@ -190,6 +205,7 @@ pitching <- batted_balls |>
     HR  = sum(events == "home_run", na.rm = TRUE),
     .groups = "drop"
   ) |>
+  left_join(ip_by_pitcher |> select(pitcher, IP), by = "pitcher") |>
   left_join(pitcher_names, by = "pitcher") |>
   mutate(
     team_name    = case_when(
@@ -268,9 +284,9 @@ make_batting_table <- function(team_name, logo_url) {
 make_pitching_table <- function(team_name, logo_url) {
   pitching |>
     filter(team_name == !!team_name) |>
-    select(display_name, BF, H, ER, BB, K, HR) |>
+    select(display_name, IP, H, ER, BB, K, HR) |>
     gt() |>
-    cols_label(display_name = "Pitcher") |>
+    cols_label(display_name = "Pitcher", IP = "IP") |>
     cols_align(align = "center") |>
     cols_align(align = "left", columns = display_name) |>
     tab_style(
