@@ -44,8 +44,5 @@ jobs:
             any::stringr
             any::purrr
 
-      - name: Debug host
-        run: echo "Host length is ${#SUPA_HOST}"
-
       - name: Run pipeline
         run: Rscript main.R
