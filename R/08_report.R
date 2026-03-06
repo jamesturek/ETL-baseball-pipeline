@@ -20,8 +20,8 @@ con <- dbConnect(
   RPostgres::Postgres(),
   dbname   = "baseball_statcast",
   host     = "localhost",
-  port     = 5432,
-  user     = "postgres",
+  port     = 6543,
+  user     = "postgres.phvritbiwlcsjxqhizpt",
   password = Sys.getenv("PGPASSWORD")
 )
 
