@@ -10,10 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SUPA_HOST: ${{ secrets.SUPA_HOST }}
-      SUPA_PASSWORD: ${{ secrets.SUPA_PASSWORD }}
-      PGPASSWORD: ${{ secrets.PGPASSWORD }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  SUPA_HOST: ${{ secrets.SUPA_HOST }}
+  SUPA_PASSWORD: ${{ secrets.SUPA_PASSWORD }}
+  SUPA_PORT: ${{ secrets.SUPA_PORT }}
+  PGPASSWORD: ${{ secrets.PGPASSWORD }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - name: Checkout repo

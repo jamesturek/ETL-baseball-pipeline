@@ -13,8 +13,8 @@ con <- dbConnect(
   RPostgres::Postgres(),
   dbname   = "postgres",
   host     = Sys.getenv("SUPA_HOST"),
-  port     = 5432,
-  user     = "postgres",
+  port     = as.integer(Sys.getenv("SUPA_PORT", "5432")),
+  user     = "postgres.phvritbiwlcsjxqhizpt",
   password = Sys.getenv("SUPA_PASSWORD")
 )
 
