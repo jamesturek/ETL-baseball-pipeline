@@ -12406,3 +12406,276 @@ Warning messages:
   Pipeline complete in 0 mins
   2026-03-04 13:01:19.367018
 ========================================
+========================================
+  CWS Baseball ETL Pipeline
+  Run time: 2026-03-05 06:55:53.651589
+========================================
+
+--- STEP 1: EXTRACT ---
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: 'lubridate'
+
+The following objects are masked from 'package:base':
+
+    date, intersect, setdiff, union
+
+Incremental run: pulling from 2026-03-04
+Date range: 2026-03-04 to 2026-03-04
+Pulling CWS schedule...
+Games found: 0
+Pulling game info...
+Pulling linescores...
+Pulling batting orders...
+Pulling CWS batter Statcast data...
+Pulling opponent batter Statcast data...
+Batted ball events extracted: 0
+Pulling CWS batting game logs...
+Batting logs failed: unused argument (which_type = "mlb")
+Pulling CWS pitching game logs...
+Pitching logs failed: unused argument (which_type = "mlb")
+All raw extracts saved to data/raw/
+Extract complete.
+Warning messages:
+1: In statcast_search(start_date = as.character(chunk[1]), end_date = as.character(chunk[2]),  :
+  No valid data found
+2: In statcast_search(start_date = as.character(chunk[1]), end_date = as.character(chunk[2]),  :
+  No valid data found
+
+--- STEP 2: TRANSFORM ---
+
+Attaching package: 'janitor'
+
+The following objects are masked from 'package:stats':
+
+    chisq.test, fisher.test
+
+Transforming games table...
+TRANSFORM FAILED: Must group by variables found in `.data`.
+Error in group_by(linescore_raw, game_pk) : 
+  Must group by variables found in `.data`.
+✖ Column `game_pk` is not found.
+Calls: tryCatch -> tryCatchList -> tryCatchOne -> <Anonymous>
+Execution halted
+========================================
+  CWS Baseball ETL Pipeline
+  Run time: 2026-03-06 09:10:52.708537
+========================================
+
+--- STEP 1: EXTRACT ---
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: 'lubridate'
+
+The following objects are masked from 'package:base':
+
+    date, intersect, setdiff, union
+
+Incremental run: pulling from 2026-03-04
+Date range: 2026-03-04 to 2026-03-05
+Pulling CWS schedule...
+Games found: 0
+Pulling game info...
+Pulling linescores...
+Pulling batting orders...
+Pulling CWS batter Statcast data...
+Pulling opponent batter Statcast data...
+Batted ball events extracted: 1786
+Pulling CWS full pitch-by-pitch data...
+^C========================================
+  CWS Baseball ETL Pipeline
+  Run time: 2026-03-06 09:11:38.85784
+========================================
+
+--- STEP 1: EXTRACT ---
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: 'lubridate'
+
+The following objects are masked from 'package:base':
+
+    date, intersect, setdiff, union
+
+Incremental run: pulling from 2026-03-04
+Date range: 2026-03-04 to 2026-03-05
+Pulling CWS schedule...
+Games found: 0
+Pulling game info...
+Pulling linescores...
+Pulling batting orders...
+Pulling CWS batter Statcast data...
+Pulling opponent batter Statcast data...
+Batted ball events extracted: 1786
+Pulling CWS full pitch-by-pitch data...
+Pulling opponent full pitch-by-pitch data...
+Total pitches extracted: 6018
+Pulling CWS batting game logs...
+Batting logs failed: unused argument (which_type = "mlb")
+Pulling CWS pitching game logs...
+Pitching logs failed: unused argument (which_type = "mlb")
+All raw extracts saved to data/raw/
+Extract complete.
+
+--- STEP 2: TRANSFORM ---
+
+Attaching package: 'janitor'
+
+The following objects are masked from 'package:stats':
+
+    chisq.test, fisher.test
+
+Transforming games table...
+TRANSFORM FAILED: Must group by variables found in `.data`.
+Error in group_by(linescore_raw, game_pk) : 
+  Must group by variables found in `.data`.
+✖ Column `game_pk` is not found.
+Calls: tryCatch -> tryCatchList -> tryCatchOne -> <Anonymous>
+Execution halted
+========================================
+  CWS Baseball ETL Pipeline
+  Run time: 2026-03-06 09:18:17.863731
+========================================
+
+--- STEP 1: EXTRACT ---
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: 'lubridate'
+
+The following objects are masked from 'package:base':
+
+    date, intersect, setdiff, union
+
+Incremental run: pulling from 2026-03-04
+Date range: 2026-03-04 to 2026-03-05
+Pulling CWS schedule...
+Games found: 0
+Pulling game info...
+Pulling linescores...
+Pulling batting orders...
+Pulling CWS batter Statcast data...
+Pulling opponent batter Statcast data...
+Batted ball events extracted: 1786
+Pulling CWS full pitch-by-pitch data...
+Pulling opponent full pitch-by-pitch data...
+Total pitches extracted: 6018
+Pulling CWS batting game logs...
+Batting logs failed: unused argument (which_type = "mlb")
+Pulling CWS pitching game logs...
+Pitching logs failed: unused argument (which_type = "mlb")
+All raw extracts saved to data/raw/
+Extract complete.
+
+--- STEP 2: TRANSFORM ---
+
+Attaching package: 'janitor'
+
+The following objects are masked from 'package:stats':
+
+    chisq.test, fisher.test
+
+Transforming games table...
+TRANSFORM FAILED: Must group by variables found in `.data`.
+Error in group_by(linescore_raw, game_pk) : 
+  Must group by variables found in `.data`.
+✖ Column `game_pk` is not found.
+Calls: tryCatch -> tryCatchList -> tryCatchOne -> <Anonymous>
+Execution halted
+========================================
+  CWS Baseball ETL Pipeline
+  Run time: 2026-03-06 09:20:04.861267
+========================================
+
+--- STEP 1: EXTRACT ---
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: 'lubridate'
+
+The following objects are masked from 'package:base':
+
+    date, intersect, setdiff, union
+
+Incremental run: pulling from 2026-03-04
+Date range: 2026-03-04 to 2026-03-05
+Pulling CWS schedule...
+Games found: 0
+Pulling game info...
+Pulling linescores...
+Pulling batting orders...
+Pulling CWS batter Statcast data...
+Pulling opponent batter Statcast data...
+Batted ball events extracted: 1786
+Pulling CWS full pitch-by-pitch data...
+Pulling opponent full pitch-by-pitch data...
+Total pitches extracted: 6018
+Pulling CWS batting game logs...
+Batting logs failed: unused argument (which_type = "mlb")
+Pulling CWS pitching game logs...
+Pitching logs failed: unused argument (which_type = "mlb")
+All raw extracts saved to data/raw/
+Extract complete.
+
+--- STEP 2: TRANSFORM ---
+
+Attaching package: 'janitor'
+
+The following objects are masked from 'package:stats':
+
+    chisq.test, fisher.test
+
+Transforming games table...
+TRANSFORM FAILED: Must group by variables found in `.data`.
+Error in group_by(linescore_raw, game_pk) : 
+  Must group by variables found in `.data`.
+✖ Column `game_pk` is not found.
+Calls: tryCatch -> tryCatchList -> tryCatchOne -> <Anonymous>
+Execution halted

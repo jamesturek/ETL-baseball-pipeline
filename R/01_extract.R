@@ -45,7 +45,7 @@ if (dbExistsTable(con, "batted_balls")) {
 
 dbDisconnect(con)
 
-end_date   <- as.character(Sys.Date() - 1)
+end_date <- as.character(Sys.Date())
 up_to_date <- as.Date(start_date) > as.Date(end_date)
 
 if (up_to_date) {
@@ -64,10 +64,11 @@ if (up_to_date) {
     level_ids = "1"
   ) |>
     filter(
-      as.Date(game_date) >= as.Date(start_date),
-      as.Date(game_date) <= as.Date(end_date),
+      as.Date(substr(game_date, 1, 10)) >= as.Date(start_date),
+      as.Date(substr(game_date, 1, 10)) <= as.Date(end_date),
       status_detailed_state == "Final",
-      teams_home_team_id == 145 | teams_away_team_id == 145
+      teams_home_team_id == 145 | teams_away_team_id == 145,
+      game_type %in% c("R", "F", "D", "L", "W", "S")
     )
 
   game_pks <- cws_schedule$game_pk
@@ -176,8 +177,7 @@ if (up_to_date) {
   batting_logs_raw <- tryCatch({
     logs <- fg_batter_game_logs(
       playerid   = NULL,
-      year       = season,
-      which_type = "mlb"
+      year       = season
     ) |>
       filter(Team == "CWS")
     message("Batting log rows: ", nrow(logs))
@@ -195,8 +195,7 @@ if (up_to_date) {
   pitching_logs_raw <- tryCatch({
     logs <- fg_pitcher_game_logs(
       playerid   = NULL,
-      year       = season,
-      which_type = "mlb"
+      year       = season
     ) |>
       filter(Team == "CWS")
     message("Pitching log rows: ", nrow(logs))

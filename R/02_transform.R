@@ -22,6 +22,12 @@ pitching_logs_raw  <- if (file.exists("data/raw/pitching_logs_raw.rds")) readRDS
 # -------------------------
 cws_game_pks <- schedule_raw$game_pk
 
+if (length(cws_game_pks) == 0) {
+  message("No CWS games in this date range. Skipping transform.")
+  writeLines("skip", "data/raw/pipeline_status.txt")
+  quit(save = "no", status = 0)
+}
+
 # -------------------------
 # 1. Games table
 # -------------------------
