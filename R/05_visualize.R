@@ -12,6 +12,7 @@ library(ggplot2)
 library(ggrepel)
 library(GeomMLBStadiums)
 library(ggimage)
+library(stringr)
 # ── Connection ─────────────────────────────────────────────────────────────────
 
 con <- dbConnect(
@@ -26,6 +27,7 @@ con <- dbConnect(
 batted_balls <- dbGetQuery(con, "SELECT * FROM batted_balls")
 games        <- dbGetQuery(con, "SELECT * FROM games")
 cws_players  <- dbGetQuery(con, "SELECT full_name FROM players WHERE team_id = 145")
+pitches_raw  <- dbGetQuery(con, "SELECT * FROM pitches")
 
 dbDisconnect(con)
 
@@ -110,7 +112,7 @@ theme_spray <- function() {
       plot.subtitle    = element_text(size = 11, hjust = 0.5, colour = "grey40"),
       plot.caption     = element_text(size = 9, colour = "grey60", hjust = 0.5),
       plot.background  = element_rect(fill = "white", colour = NA),
-      plot.margin      = margin(10, 40, 40, 10)   # increased right margin from 10 to 50
+      plot.margin      = margin(10, 40, 40, 10)
     )
 }
 
@@ -255,7 +257,7 @@ geom_spraychart(
   hit_labels() +
   hit_colours +
   logo_watermark(145) +
-  coord_fixed(clip = "off") +    # <-- changed
+  coord_fixed(clip = "off") +
   theme_spray() +
   labs(
     title    = "Where Did the White Sox Hit the Ball?",
@@ -537,6 +539,321 @@ p5 <- ggplot(leaderboard,
   )
 
 save_plot(p5, "05_hard_hit_leaderboard.png", width = 11, height = 9)
+
+# ── 6. Win probability chart ───────────────────────────────────────────────────
+
+message("Generating win probability chart...")
+
+wp_data <- pitches_raw |>
+  arrange(inning, inning_topbot, at_bat_number, pitch_number) |>
+  mutate(
+    cws_win_exp = if_else(home_team == "CWS", home_win_exp, 1 - home_win_exp),
+    pitch_seq   = row_number()
+  )
+
+# Only annotate plays where the lead changes hands
+scoring_plays <- wp_data |>
+  filter(
+    !is.na(events),
+    events %in% c("single", "double", "triple", "home_run",
+                  "sac_fly", "fielders_choice", "grounded_into_double_play"),
+    abs(delta_run_exp) >= 0.15,
+    cws_win_exp >= 0.05
+  ) |>
+  mutate(
+    # Determine if this play helped CWS or the opponent
+    cws_batting = (home_team == "CWS" & inning_topbot == "Bot") |
+                  (away_team == "CWS" & inning_topbot == "Top"),
+    play_favour = if_else(
+      (cws_batting & delta_run_exp > 0) | (!cws_batting & delta_run_exp < 0),
+      "CWS", "Opponent"
+    ),
+    label = case_when(
+      events == "home_run"                  ~ "HR",
+      events == "triple"                    ~ "3B",
+      events == "double"                    ~ "2B",
+      events == "single"                    ~ "1B",
+      events == "sac_fly"                   ~ "SF",
+      events == "fielders_choice"           ~ "FC",
+      events == "grounded_into_double_play" ~ "GDP",
+      TRUE                                  ~ str_to_title(events)
+    )
+  )
+
+# First pitch of each half-inning for x-axis labels
+inning_breaks <- wp_data |>
+  group_by(inning, inning_topbot) |>
+  slice_min(pitch_seq, n = 1) |>
+  ungroup() |>
+  mutate(inning_label = if_else(inning_topbot == "Top",
+                                paste0("T", inning),
+                                paste0("B", inning)))
+
+# Two ribbon layers: green above 50%, red below 50%
+ribbon_above <- wp_data |>
+  mutate(x = pitch_seq, ymax = pmax(cws_win_exp, 0.5), ymin = 0.5)
+
+ribbon_below <- wp_data |>
+  mutate(x = pitch_seq, ymin = pmin(cws_win_exp, 0.5), ymax = 0.5)
+
+p6 <- ggplot(wp_data, aes(x = pitch_seq, y = cws_win_exp)) +
+  # Inning dividers
+  geom_vline(
+    data      = inning_breaks,
+    aes(xintercept = pitch_seq),
+    colour    = "grey88",
+    linewidth = 0.3,
+    linetype  = "dashed"
+  ) +
+  # Green ribbon above 50%
+  geom_ribbon(
+    data = ribbon_above,
+    aes(x = x, ymin = ymin, ymax = ymax),
+    fill  = "#2e7d32",
+    alpha = 0.2,
+    inherit.aes = FALSE
+  ) +
+  geom_ribbon(
+    data = ribbon_below,
+    aes(x = x, ymin = ymin, ymax = ymax),
+    fill  = "#c0392b",
+    alpha = 0.2,
+    inherit.aes = FALSE
+  ) +
+  # 50% reference line
+  geom_hline(yintercept = 0.5, colour = "grey50", linewidth = 0.4, linetype = "dotted") +
+  # Win probability line
+  geom_line(colour = "#1a1a1a", linewidth = 0.9) +
+  # Lead change dots
+  geom_point(
+    data        = scoring_plays,
+    aes(x = pitch_seq, y = cws_win_exp, colour = play_favour),
+    size        = 3.5,
+    show.legend = TRUE
+  ) +
+  # Lead change labels
+  ggrepel::geom_label_repel(
+    data          = scoring_plays,
+    aes(x = pitch_seq, y = cws_win_exp, label = label, colour = play_favour),
+    size          = 3.2,
+    fontface      = "bold",
+    fill          = "white",
+    label.size    = 0.25,
+    label.padding = unit(0.2, "lines"),
+    min.segment.length = 0.2,
+    box.padding   = 0.4,
+    max.overlaps  = Inf,
+    show.legend   = FALSE
+  ) +
+  scale_colour_manual(
+    values = c("CWS" = "#2e7d32", "Opponent" = "#c0392b"),
+    name   = NULL
+  ) +
+  scale_x_continuous(
+    breaks = inning_breaks$pitch_seq,
+    labels = inning_breaks$inning_label
+  ) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    labels = scales::percent_format(accuracy = 1)
+  ) +
+  labs(
+    title    = paste0("Win Probability: CWS vs ", latest_game$opponent),
+    subtitle = game_title,
+    x        = "Inning",
+    y        = "CWS Win Probability",
+    caption  = "HR = home run, 2B/3B = double/triple, 1B = single, SF = sac fly, FC = fielders choice, GDP = grounded into double play.\nGreen = CWS scoring play, red = opponent (|delta run exp| >= 0.15, garbage time excluded). Data: Baseball Savant."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 15),
+    plot.subtitle      = element_text(size = 11, colour = "grey40"),
+    plot.caption       = element_text(size = 9, colour = "grey60"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor   = element_blank(),
+    axis.text.x        = element_text(size = 8, colour = "grey50"),
+    plot.background    = element_rect(fill = "white", colour = NA)
+  )
+
+save_plot(p6, "06_win_probability.png")
+
+
+# ── 7. Pitch speed by pitcher ──────────────────────────────────────────────────
+
+message("Generating pitch speed by pitcher...")
+
+pitch_speed_data <- pitches_raw |>
+  filter(!is.na(release_speed), !is.na(pitch_name)) |>
+  left_join(pitcher_names, by = "pitcher") |>
+  mutate(
+    team_side = case_when(
+      home_team == "CWS" & inning_topbot == "Bot" ~ latest_game$opponent,
+      home_team == "CWS" & inning_topbot == "Top" ~ "CWS",
+      away_team == "CWS" & inning_topbot == "Top" ~ latest_game$opponent,
+      away_team == "CWS" & inning_topbot == "Bot" ~ "CWS"
+    )
+  ) |>
+  group_by(pitcher_name, team_side, pitch_name) |>
+  summarise(
+    avg_speed = round(mean(release_speed), 1),
+    n_pitches = n(),
+    .groups   = "drop"
+  ) |>
+  filter(n_pitches >= 3) |>
+  left_join(
+    # fastball velo for ordering
+    pitches_raw |>
+      left_join(pitcher_names, by = "pitcher") |>
+      filter(pitch_type %in% c("FF", "SI")) |>
+      group_by(pitcher_name) |>
+      summarise(fb_velo = mean(release_speed, na.rm = TRUE), .groups = "drop"),
+    by = "pitcher_name"
+  ) |>
+  mutate(pitcher_name = reorder(pitcher_name, fb_velo))
+
+p7 <- ggplot(pitch_speed_data,
+             aes(x = avg_speed, y = pitcher_name, colour = pitch_name, size = n_pitches)) +
+  geom_point(alpha = 0.85) +
+  ggrepel::geom_text_repel(
+    aes(label = paste0(avg_speed, " mph")),
+    size            = 3.0,
+    colour          = "grey15",
+    fontface        = "bold",
+    show.legend     = FALSE,
+    box.padding     = 0.35,
+    point.padding   = 0.3,
+    min.segment.length = 0.3,
+    max.overlaps    = Inf
+  ) +
+  facet_wrap(~ team_side, scales = "free_y", ncol = 1) +
+  scale_size_continuous(range = c(3, 8), name = "Pitches thrown") +
+  scale_colour_manual(
+    name   = "Pitch type",
+    values = c(
+      "4-Seam Fastball" = "#E63946",
+      "Sinker"          = "#F4A261",
+      "Cutter"          = "#E76F51",
+      "Changeup"        = "#2A9D8F",
+      "Curveball"       = "#457B9D",
+      "Slider"          = "#9B5DE5",
+      "Sweeper"         = "#F72585",
+      "Knuckle Curve"   = "#3A86FF",
+      "Splitter"        = "#06D6A0"
+    )
+  ) +
+  scale_x_continuous(
+    limits = c(70, 100),
+    breaks = seq(70, 100, 5),
+    labels = paste0(seq(70, 100, 5), " mph")
+  ) +
+  labs(
+    title    = "Average Pitch Speed by Pitcher and Pitch Type",
+    subtitle = game_title,
+    x        = NULL,
+    y        = NULL,
+    caption  = "Dot size = number of pitches thrown. Minimum 3 pitches per type shown. Data: Baseball Savant."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 15),
+    plot.subtitle    = element_text(size = 11, colour = "grey40"),
+    plot.caption     = element_text(size = 9, colour = "grey60"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey92"),
+    strip.text       = element_text(face = "bold", size = 12),
+    legend.position  = "bottom",
+    plot.background  = element_rect(fill = "white", colour = NA)
+  )
+
+save_plot(p7, "07_pitch_speed.png", width = 11, height = 10)
+
+
+# ── 8. Best and worst plate appearances ────────────────────────────────────────
+
+message("Generating best and worst plate appearances...")
+
+pa_data <- pitches_raw |>
+  filter(!is.na(events), !is.na(delta_run_exp)) |>
+  mutate(
+    cws_win_exp = if_else(home_team == "CWS", home_win_exp, 1 - home_win_exp),
+    cws_batting = (home_team == "CWS" & inning_topbot == "Bot") |
+                  (away_team == "CWS" & inning_topbot == "Top"),
+    # Positive delta_run_exp for batting team = good for batter
+    cws_delta = if_else(cws_batting, delta_run_exp, -delta_run_exp),
+    batter_name = sapply(player_name, format_name),
+    inning_label = paste0(if_else(inning_topbot == "Top", "T", "B"), inning),
+    event_label = case_when(
+      events == "home_run" ~ "HR",
+      events == "triple"   ~ "3B",
+      events == "double"   ~ "2B",
+      events == "single"   ~ "1B",
+      events == "strikeout" ~ "K",
+      events == "hit_by_pitch" ~ "HBP",
+      events == "walk"      ~ "BB",
+      events == "sac_fly"   ~ "SF",
+      events == "grounded_into_double_play" ~ "GDP",
+      grepl("out", events)  ~ "Out",
+      TRUE                  ~ str_to_title(events)
+    )
+  )
+
+best_pa <- pa_data |>
+  arrange(desc(cws_delta)) |>
+  slice_head(n = 5) |>
+  mutate(category = "Best White Sox Plate Appearances")
+
+worst_pa <- pa_data |>
+  arrange(cws_delta) |>
+  slice_head(n = 5) |>
+  mutate(category = "Most Damaging Opponent Plate Appearances")
+
+top_pa <- bind_rows(best_pa, worst_pa) |>
+  mutate(
+    label      = paste0(batter_name, " (", event_label, ", ", inning_label, ")"),
+    label      = reorder(label, cws_delta),
+    bar_colour = if_else(cws_delta > 0, "positive", "negative")
+  )
+
+p8 <- ggplot(top_pa, aes(x = cws_delta, y = label, fill = bar_colour)) +
+  geom_col(width = 0.65, alpha = 0.9) +
+  geom_vline(xintercept = 0, colour = "grey40", linewidth = 0.5) +
+  geom_text(
+    aes(
+      label = paste0(if_else(cws_delta > 0, "+", ""), round(cws_delta, 2)),
+      hjust = if_else(cws_delta > 0, -0.15, 1.15)
+    ),
+    size     = 3.5,
+    fontface = "bold",
+    colour   = "grey20"
+  ) +
+  facet_wrap(~ category, scales = "free_y", ncol = 1) +
+  scale_fill_manual(values = c("positive" = "#2e7d32", "negative" = "#c0392b")) +
+  scale_x_continuous(
+    limits = c(-2.5, 2.8),
+    breaks = seq(-2.5, 2.5, 0.5),
+    labels = function(x) ifelse(x > 0, paste0("+", x), x)
+  ) +
+  labs(
+    title    = "Best and Worst Plate Appearances for CWS",
+    subtitle = game_title,
+    x        = "Run Expectancy Added (CWS perspective)",
+    y        = NULL,
+    caption  = "Positive = helped CWS, negative = hurt CWS. Based on change in run expectancy. Data: Baseball Savant."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 15),
+    plot.subtitle      = element_text(size = 11, colour = "grey40"),
+    plot.caption       = element_text(size = 9, colour = "grey60"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor   = element_blank(),
+    strip.text         = element_text(face = "bold", size = 12),
+    legend.position    = "none",
+    plot.background    = element_rect(fill = "white", colour = NA),
+    plot.margin        = margin(10, 30, 10, 10)
+  )
+
+save_plot(p8, "08_best_worst_pa.png", width = 11, height = 8)
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 
