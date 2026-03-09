@@ -11,7 +11,10 @@ arsenal <- smith_pitches |>
     n          = n(),
     avg_velo   = round(mean(release_speed, na.rm = TRUE), 1),
     avg_spin   = round(mean(release_spin_rate, na.rm = TRUE), 0),
-    whiff_rate = round(mean(description == "swinging_strike", na.rm = TRUE) * 100, 1),
+    whiff_rate = round(
+  sum(description == "swinging_strike") / 
+  sum(description %in% c("swinging_strike", "foul", "hit_into_play", "foul_tip")) * 100, 1
+),
     usage_pct  = n / nrow(filter(smith_pitches, pitch_name != "", game_type == "R")) * 100,
     .groups    = "drop"
   ) |>
