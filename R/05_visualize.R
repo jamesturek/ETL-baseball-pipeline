@@ -655,7 +655,7 @@ p6 <- ggplot(wp_data, aes(x = pitch_seq, y = cws_win_exp)) +
     subtitle = game_title,
     x        = "Inning",
     y        = "CWS Win Probability",
-    caption  = "HR = home run, 2B/3B = double/triple, 1B = single, SF = sac fly, FC = fielders choice, GDP = grounded into double play.\nGreen = CWS scoring play, red = opponent (|delta run exp| >= 0.25, garbage time excluded). Data: Baseball Savant."
+    caption = "HR = home run, 2B/3B = double/triple, 1B = single, SF = sac fly, FC = fielders choice, GDP = grounded into double play. \nGreen = high-leverage CWS play, red = high-leverage opponent play (|delta run expectancy| >= 0.25, garbage time excluded). Data: Baseball Savant."
   ) +
   theme_minimal(base_size = 12) +
   theme(
