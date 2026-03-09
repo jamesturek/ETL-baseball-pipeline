@@ -828,7 +828,7 @@ best_pa <- pa_data |>
 worst_pa <- pa_data |>
   arrange(cws_delta) |>
   slice_head(n = 5) |>
-  mutate(category = "Most Damaging Opponent Plate Appearances")
+  mutate(category = "Most Damaging Plate Appearances Against CWS")
 
 top_pa <- bind_rows(best_pa, worst_pa) |>
   mutate(
@@ -859,7 +859,7 @@ p8 <- ggplot(top_pa, aes(x = cws_delta, y = label, fill = bar_colour)) +
   labs(
     title    = "Best and Worst Plate Appearances for CWS",
     subtitle = game_title,
-    x        = "Run Expectancy Added (CWS perspective)",
+    x        = "Run Expectancy (CWS perspective)",
     y        = NULL,
     caption  = "Positive = helped CWS, negative = hurt CWS. Based on change in run expectancy. Data: Baseball Savant."
   ) +
