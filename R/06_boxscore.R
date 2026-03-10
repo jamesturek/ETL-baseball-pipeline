@@ -15,23 +15,18 @@ library(png)
 library(RCurl)
 library(purrr)
 
-# ── Connection ─────────────────────────────────────────────────────────────────
+# ── Validate connection ────────────────────────────────────────────────────────
 
-con <- dbConnect(
-  RPostgres::Postgres(),
-  dbname   = "postgres",
-  host     = Sys.getenv("SUPA_HOST"),
-  port     = 6543,
-  user     = "postgres.phvritbiwlcsjxqhizpt",
-  password = Sys.getenv("SUPA_PASSWORD")
-)
+if (!exists("con") || !dbIsValid(con)) {
+  stop("No valid database connection. Run from main.R or connect manually.")
+}
+
+# ── Query data ─────────────────────────────────────────────────────────────────
 
 batted_balls <- dbGetQuery(con, "SELECT * FROM batted_balls")
 linescore    <- dbGetQuery(con, "SELECT * FROM linescore")
 games        <- dbGetQuery(con, "SELECT * FROM games")
 pitches_raw  <- dbGetQuery(con, "SELECT * FROM pitches")
-
-dbDisconnect(con)
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 

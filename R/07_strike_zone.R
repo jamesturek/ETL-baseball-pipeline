@@ -13,21 +13,16 @@ library(ggrepel)
 library(purrr)
 library(baseballr)
 
-# ── Connection ─────────────────────────────────────────────────────────────────
+# ── Validate connection ────────────────────────────────────────────────────────
 
-con <- dbConnect(
-  RPostgres::Postgres(),
-  dbname   = "postgres",
-  host     = Sys.getenv("SUPA_HOST"),
-  port     = 6543,
-  user     = "postgres.phvritbiwlcsjxqhizpt",
-  password = Sys.getenv("SUPA_PASSWORD")
-)
+if (!exists("con") || !dbIsValid(con)) {
+  stop("No valid database connection. Run from main.R or connect manually.")
+}
+
+# ── Query data ─────────────────────────────────────────────────────────────────
 
 pitches <- dbGetQuery(con, "SELECT * FROM pitches")
 games   <- dbGetQuery(con, "SELECT * FROM games")
-
-dbDisconnect(con)
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 
@@ -174,7 +169,6 @@ make_zone_plot <- function(team_side, team_label, filename_prefix) {
         guide = "none"
       ) +
       strike_zone +
-      # Black outline layer
       geom_point(
         aes(shape = pitch_result),
         colour = "black",
@@ -182,14 +176,12 @@ make_zone_plot <- function(team_side, team_label, filename_prefix) {
         alpha  = 0.9,
         stroke = 1.2
       ) +
-      # Coloured layer on top
       geom_point(
         aes(colour = pitch_name, shape = pitch_result),
         size   = 3.8,
         alpha  = 0.95,
         stroke = 0.8
       ) +
-      # Elite velo labels
       geom_label_repel(
         data        = elite,
         aes(label   = paste0(round(release_speed, 1), " mph")),

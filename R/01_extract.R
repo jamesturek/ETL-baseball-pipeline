@@ -15,16 +15,11 @@ library(DBI)
 library(RPostgres)
 
 # -------------------------
-# Database connection
+# Validate connection
 # -------------------------
-con <- dbConnect(
-  RPostgres::Postgres(),
-  dbname   = "postgres",
-  host     = Sys.getenv("SUPA_HOST"),
-  port     = 6543,
-  user     = "postgres.phvritbiwlcsjxqhizpt",
-  password = Sys.getenv("SUPA_PASSWORD")
-)
+if (!exists("con") || !dbIsValid(con)) {
+  stop("No valid database connection. Run from main.R or connect manually.")
+}
 
 # -------------------------
 # Determine date range
@@ -42,8 +37,6 @@ if (dbExistsTable(con, "batted_balls")) {
   start_date <- "2026-03-03"
   message("First run: pulling from ", start_date)
 }
-
-dbDisconnect(con)
 
 end_date <- as.character(Sys.Date())
 up_to_date <- as.Date(start_date) > as.Date(end_date)
@@ -237,4 +230,3 @@ if (up_to_date) {
   message("Extract complete.")
 
 } # end if/else up_to_date
-

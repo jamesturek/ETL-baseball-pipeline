@@ -6,6 +6,13 @@ library(RPostgres)
 library(dplyr)
 
 # -------------------------
+# Validate connection
+# -------------------------
+if (!exists("con") || !dbIsValid(con)) {
+  stop("No valid database connection. Run from main.R or connect manually.")
+}
+
+# -------------------------
 # Load processed data
 # -------------------------
 games        <- readRDS("data/processed/games.rds")
@@ -15,20 +22,6 @@ linescore    <- readRDS("data/processed/linescore.rds")
 pitches      <- if (file.exists("data/processed/pitches.rds")) readRDS("data/processed/pitches.rds") else NULL
 batting_logs  <- if (file.exists("data/processed/batting_logs.rds"))  readRDS("data/processed/batting_logs.rds")  else NULL
 pitching_logs <- if (file.exists("data/processed/pitching_logs.rds")) readRDS("data/processed/pitching_logs.rds") else NULL
-
-# -------------------------
-# Database connection
-# -------------------------
-con <- dbConnect(
-  RPostgres::Postgres(),
-  dbname   = "postgres",
-  host     = Sys.getenv("SUPA_HOST"),
-  port     = 6543,
-  user     = "postgres.phvritbiwlcsjxqhizpt",
-  password = Sys.getenv("SUPA_PASSWORD")
-)
-
-message("Connected to PostgreSQL: baseball_statcast")
 
 # -------------------------
 # Create tables if not exists
@@ -332,5 +325,4 @@ for (t in tables) {
   })
 }
 
-dbDisconnect(con)
-message("Load complete. Database connection closed.")
+message("Load complete.")

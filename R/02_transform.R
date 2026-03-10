@@ -25,13 +25,13 @@ cws_game_pks <- schedule_raw$game_pk
 if (length(cws_game_pks) == 0) {
   message("No CWS games in this date range. Skipping transform.")
   writeLines("skip", "data/raw/pipeline_status.txt")
-  quit(save = "no", status = 0)
+  stop("No CWS games in date range.")
 }
 
 if (nrow(batted_balls_raw) == 0) {
   message("No Statcast data available yet. Try again later - Statcast updates daily at 3am Eastern.")
   writeLines("skip", "data/raw/pipeline_status.txt")
-  quit(save = "no", status = 0)
+  stop("No Statcast data available.")
 }
 
 # -------------------------
@@ -193,7 +193,6 @@ if (!is.null(pitches_raw) && nrow(pitches_raw) > 0) {
       pitch_name = na_if(pitch_name, ""),
       description = na_if(description, ""),
       events      = na_if(events, ""),
-      # Classify pitch result
       pitch_result = case_when(
         description %in% c("called_strike", "swinging_strike",
                             "swinging_strike_blocked", "foul_tip") ~ "Strike",
@@ -206,7 +205,6 @@ if (!is.null(pitches_raw) && nrow(pitches_raw) > 0) {
         description == "hit_into_play"                              ~ "Out",
         TRUE                                                        ~ "Other"
       ),
-      # Fastball velocity flag
       elite_velo = pitch_type %in% c("FF", "SI", "FC") &
                    release_speed >= 99
     ) |>
