@@ -156,7 +156,7 @@ batting <- batted_balls |>
 
 # ── Pitching lines ─────────────────────────────────────────────────────────────
 
-pitcher_ids <- batted_balls |>
+pitcher_ids <- pitches_raw |>
   filter(game_pk == latest_game$game_pk) |>
   pull(pitcher) |>
   unique()
@@ -178,14 +178,27 @@ out_events <- c(
   "other_out", "sac_fly", "sac_bunt"
 )
 
-ip_by_pitcher <- pitches_raw |>
+# Calculate IP, K, BB from pitches_raw (captures all PA outcomes)
+pitching_from_pitches <- pitches_raw |>
   filter(game_pk == latest_game$game_pk, !is.na(events)) |>
-  mutate(is_out = events %in% out_events) |>
-  group_by(pitcher) |>
-  summarise(outs = sum(is_out, na.rm = TRUE), .groups = "drop") |>
+  mutate(
+    pitcher_team = case_when(
+      inning_topbot == "Top" ~ home_team,
+      inning_topbot == "Bot" ~ away_team
+    ),
+    is_out = events %in% out_events
+  ) |>
+  group_by(pitcher, pitcher_team) |>
+  summarise(
+    outs = sum(is_out, na.rm = TRUE),
+    K    = sum(events %in% c("strikeout", "strikeout_double_play"), na.rm = TRUE),
+    BB   = sum(events %in% c("walk", "intent_walk"), na.rm = TRUE),
+    .groups = "drop"
+  ) |>
   mutate(IP = floor(outs / 3) + (outs %% 3) / 10)
 
-pitching <- batted_balls |>
+# Calculate H, ER, HR from batted_balls
+pitching_from_bb <- batted_balls |>
   filter(game_pk == latest_game$game_pk) |>
   mutate(
     pitcher_team = case_when(
@@ -195,16 +208,19 @@ pitching <- batted_balls |>
   ) |>
   group_by(pitcher, pitcher_team) |>
   summarise(
-    H   = sum(events %in% c("single","double","triple","home_run"), na.rm = TRUE),
-    ER  = sum(events %in% c("single","double","triple","home_run"), na.rm = TRUE),
-    BB  = sum(events == "walk", na.rm = TRUE),
-    K   = sum(events %in% c("strikeout","strikeout_double_play"), na.rm = TRUE),
-    HR  = sum(events == "home_run", na.rm = TRUE),
+    H  = sum(events %in% c("single","double","triple","home_run"), na.rm = TRUE),
+    ER = sum(events %in% c("single","double","triple","home_run"), na.rm = TRUE),
+    HR = sum(events == "home_run", na.rm = TRUE),
     .groups = "drop"
-  ) |>
-  left_join(ip_by_pitcher |> select(pitcher, IP), by = "pitcher") |>
+  )
+
+pitching <- pitching_from_pitches |>
+  left_join(pitching_from_bb |> select(pitcher, H, ER, HR), by = "pitcher") |>
   left_join(pitcher_names, by = "pitcher") |>
   mutate(
+    H            = replace_na(H, 0),
+    ER           = replace_na(ER, 0),
+    HR           = replace_na(HR, 0),
     team_name    = case_when(
       pitcher_team == "CWS" ~ latest_game$home_team_name,
       TRUE                  ~ latest_game$away_team_name
