@@ -78,18 +78,22 @@ home_runs_by_inning <- innings |>
   select(inning, home_runs) |>
   pivot_wider(names_from = inning, values_from = home_runs, names_prefix = "I")
 
+# Pull final R from games table to avoid NA from unplayed half-innings
+away_R <- if (latest_game$cws_home) latest_game$opp_score else latest_game$cws_score
+home_R <- if (latest_game$cws_home) latest_game$cws_score else latest_game$opp_score
+
 away_totals <- innings |>
   summarise(
-    R = sum(away_runs),
-    H = sum(away_hits),
-    E = sum(away_errors)
+    R = away_R,
+    H = sum(away_hits, na.rm = TRUE),
+    E = sum(away_errors, na.rm = TRUE)
   )
 
 home_totals <- innings |>
   summarise(
-    R = sum(home_runs),
-    H = sum(home_hits),
-    E = sum(home_errors)
+    R = home_R,
+    H = sum(home_hits, na.rm = TRUE),
+    E = sum(home_errors, na.rm = TRUE)
   )
 
 linescore_df <- bind_rows(
@@ -106,8 +110,6 @@ linescore_df <- bind_rows(
     home_totals
   )
 )
-
-inning_cols <- paste0("I", 1:n_innings)
 
 linescore_df <- linescore_df |>
   rename_with(~ gsub("^I", "", .), starts_with("I"))
@@ -147,7 +149,7 @@ batting <- batted_balls |>
   ) |>
   filter(AB > 0 | BB > 0) |>
   mutate(
-    AVG          = if_else(AB > 0, round(H / AB, 3), NA_real_),
+    AVG          = if_else(AB > 0, sub("^0", "", sprintf("%.3f", H / AB)), "-"),
     display_name = sapply(player_name, format_name)
   ) |>
   arrange(team_name, desc(AB))

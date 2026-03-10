@@ -13,23 +13,19 @@ library(ggrepel)
 library(GeomMLBStadiums)
 library(ggimage)
 library(stringr)
-# ── Connection ─────────────────────────────────────────────────────────────────
 
-con <- dbConnect(
-  RPostgres::Postgres(),
-  dbname   = "postgres",
-  host     = Sys.getenv("SUPA_HOST"),
-  port     = 6543,
-  user     = "postgres.phvritbiwlcsjxqhizpt",
-  password = Sys.getenv("SUPA_PASSWORD")
-)
+# ── Validate connection ────────────────────────────────────────────────────────
+
+if (!exists("con") || !dbIsValid(con)) {
+  stop("No valid database connection. Run from main.R or connect manually.")
+}
+
+# ── Query data ─────────────────────────────────────────────────────────────────
 
 batted_balls <- dbGetQuery(con, "SELECT * FROM batted_balls")
 games        <- dbGetQuery(con, "SELECT * FROM games")
 cws_players  <- dbGetQuery(con, "SELECT full_name FROM players WHERE team_id = 145")
 pitches_raw  <- dbGetQuery(con, "SELECT * FROM pitches")
-
-dbDisconnect(con)
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 
@@ -655,7 +651,7 @@ p6 <- ggplot(wp_data, aes(x = pitch_seq, y = cws_win_exp)) +
     subtitle = game_title,
     x        = "Inning",
     y        = "CWS Win Probability",
-    caption = "HR = home run, 2B/3B = double/triple, 1B = single, SF = sac fly, FC = fielders choice, GDP = grounded into double play. \nGreen = high-leverage CWS play, red = high-leverage opponent play (|delta run expectancy| >= 0.25, garbage time excluded). Data: Baseball Savant."
+    caption  = "HR = home run, 2B/3B = double/triple, 1B = single, SF = sac fly, FC = fielders choice, GDP = grounded into double play. \nGreen = high-leverage CWS play, red = high-leverage opponent play (|delta run expectancy| >= 0.25, garbage time excluded). Data: Baseball Savant."
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -670,7 +666,8 @@ p6 <- ggplot(wp_data, aes(x = pitch_seq, y = cws_win_exp)) +
 
 save_plot(p6, "06_win_probability.png")
 
-# Build pitcher name lookup from pitches data
+# ── Pitcher name lookup ────────────────────────────────────────────────────────
+
 pitcher_ids <- unique(pitches_raw$pitcher[!is.na(pitches_raw$pitcher)])
 
 pitcher_names <- baseballr::mlb_people(person_ids = pitcher_ids) |>
